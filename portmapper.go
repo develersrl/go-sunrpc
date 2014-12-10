@@ -56,7 +56,7 @@ func PortmapperSet(program uint32, version uint32, protocol PortmapperProtocol, 
 		return err
 	}
 
-	err = conn.Write(buf.Bytes())
+	_, err = conn.Write(buf.Bytes())
 	if err != nil {
 		return err
 	}
