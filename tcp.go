@@ -11,7 +11,10 @@ import (
 )
 
 var (
+	ErrArgumentsExpected           = errors.New("rpc call: unable to read procedure arguments")
+	ErrCallMessageBodyExpected     = errors.New("rpc call: call message body expected")
 	ErrCallMessageExpected         = errors.New("rpc call: call message expected")
+	ErrHeaderExpected              = errors.New("rpc call: header expected")
 	ErrIncompleteMessage           = errors.New("rpc call: cannot read the whole message")
 	ErrRPCVersion2Expected         = errors.New("rpc call: trying to read an RPC call of unsupported version")
 	ErrUnsupportedMultipleFragment = errors.New("rpc call: fragmented requests are not supported")
@@ -45,6 +48,66 @@ func ParseRecordMarker(marker uint32) (size uint32, last bool) {
 	last = (marker >> 31) == 1
 
 	return size, last
+}
+
+func ReadCall(r io.Reader, args interface{}) error {
+	var marker uint32
+
+	err := binary.Read(r, binary.LittleEndian, &marker)
+	if err != nil {
+		return err
+	}
+
+	size, last := ParseRecordMarker(marker)
+
+	if !last {
+		return ErrUnsupportedMultipleFragment
+	}
+
+	read := 0
+
+	// Read RPC message header
+	message := Message{}
+	bytesRead, err := xdr.Unmarshal(r, &message)
+	if err != nil {
+		return ErrHeaderExpected
+	}
+
+	read += bytesRead
+
+	// Make sure this is a "Call" message
+	if message.Type != Call {
+		return ErrCallMessageExpected
+	}
+
+	// Read RPC call body
+	callBody := CallMessage{}
+	bytesRead, err = xdr.Unmarshal(r, &callBody)
+	if err != nil {
+		return ErrCallMessageBodyExpected
+	}
+
+	read += bytesRead
+
+	// We can only read RPCv2 messages
+	if callBody.RPCVersion != 2 {
+		return ErrRPCVersion2Expected
+	}
+
+	// Read RPC call arguments
+	bytesRead, err = xdr.Unmarshal(r, &args)
+	if err != nil {
+		return ErrArgumentsExpected
+	}
+
+	read += bytesRead
+
+	// We must have read exactly the amount of data reported in the record marker
+	if read != int(size) {
+		return ErrIncompleteMessage
+	}
+
+	return nil
 }
 
 func WriteCall(w io.Writer, program uint32, version uint32, proc uint32, args interface{}) error {
