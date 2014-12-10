@@ -51,9 +51,15 @@ func PortmapperSet(program uint32, version uint32, protocol PortmapperProtocol, 
 
 	var buf bytes.Buffer
 
-	xdr.Marshal(&buf, &message)
+	_, err = xdr.Marshal(&buf, &message)
+	if err != nil {
+		return err
+	}
 
-	conn.Write(buf.Bytes())
+	err = conn.Write(buf.Bytes())
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
