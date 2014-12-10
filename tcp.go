@@ -50,6 +50,8 @@ func ParseRecordMarker(marker uint32) (size uint32, last bool) {
 	return size, last
 }
 
+// ReadCall reads an incoming "call" message from the given reader. Args should be a reference to a
+// structure holding any arguments accepted by the remote procedure.
 func ReadCall(r io.Reader, args interface{}) error {
 	var marker uint32
 
@@ -110,6 +112,9 @@ func ReadCall(r io.Reader, args interface{}) error {
 	return nil
 }
 
+// WriteCall writes an RPC "call" message to the given writer in order to call a remote procedure
+// with the given program, version and procedure identifiers. Args holds the arguments to pass to
+// the remote procedure.
 func WriteCall(w io.Writer, program uint32, version uint32, proc uint32, args interface{}) error {
 	var buf bytes.Buffer
 
