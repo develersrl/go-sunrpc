@@ -138,7 +138,7 @@ func WriteCall(w io.Writer, program uint32, version uint32, proc uint32, args in
 	}
 
 	// Write procedure arguments to the buffer
-	_, err = xdr.Marshal(&buf, args)
+	_, err = xdr.Marshal(&buf, &args)
 	if err != nil {
 		return err
 	}
