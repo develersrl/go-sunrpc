@@ -69,7 +69,7 @@ func TestWriteCall(t *testing.T) {
 	}
 
 	assert.Equal(t, expected[0:4], buf.Bytes()[0:4]) // Test marker
-	assert.Equal(t, expected[8:], buf.Bytes()[8:])   // Then the rest of the payload, excluding the Xid
+	assert.Equal(t, expected[8:], buf.Bytes()[8:])   // Then the rest of the payload, excluding the transaction id
 }
 
 func TestReadCall(t *testing.T) {
