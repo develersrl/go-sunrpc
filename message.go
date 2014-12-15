@@ -2,21 +2,22 @@ package sunrpc
 
 import (
 	"errors"
-	"io"
 	"time"
-
-	"github.com/davecgh/go-xdr/xdr2"
 )
+
+var (
+	ErrIncompleteMessage = errors.New("rpc call: unable to read the whole message")
+)
+
+//
+// RPC Message Header
+//
 
 type MessageType int32
 
 const (
 	Call  MessageType = 0
 	Reply MessageType = 1
-)
-
-var (
-	ErrIncompleteMessage = errors.New("rpc call: unable to read the whole message")
 )
 
 type Message struct {
@@ -31,6 +32,10 @@ func NewMessage(t MessageType) *Message {
 	}
 }
 
+//
+// Call
+//
+
 type CallMessage struct {
 	RPCVersion uint32
 	Program    uint32
@@ -40,12 +45,28 @@ type CallMessage struct {
 	Verf       [2]uint32 // Dummy
 }
 
-func ReadArguments(r io.Reader, args interface{}) error {
-	// Read RPC call arguments
-	_, err := xdr.Unmarshal(r, &args)
-	if err != nil {
-		return err
-	}
+//
+// Reply
+//
 
-	return nil
+type ReplyType int32
+
+const (
+	Accepted ReplyType = 0
+	Denied   ReplyType = 1
+)
+
+type ReplyMessage struct {
+	Type ReplyType
+}
+
+type AcceptType int32
+
+const (
+	Success AcceptType = 0
+)
+
+type AcceptedReply struct {
+	Verf [2]uint32 // Dummy
+	Type AcceptType
 }

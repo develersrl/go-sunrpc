@@ -139,3 +139,31 @@ func WriteCall(w io.Writer, program uint32, version uint32, proc uint32, args in
 
 	return nil
 }
+
+func WriteTCPReply(w io.Writer, ret interface{}) error {
+	var buf bytes.Buffer
+
+	// Header
+	header := NewMessage(Reply)
+
+	if _, err := xdr.Marshal(&buf, header); err != nil {
+		return err
+	}
+
+	// "Accepted"
+	if _, err := xdr.Marshal(&buf, ReplyMessage{Type: Accepted}); err != nil {
+		return err
+	}
+
+	// "Success"
+	if _, err := xdr.Marshal(&buf, AcceptedReply{Type: Success}); err != nil {
+		return err
+	}
+
+	// Return data
+	if _, err := xdr.Marshal(&buf, ret); err != nil {
+		return err
+	}
+
+	return nil
+}

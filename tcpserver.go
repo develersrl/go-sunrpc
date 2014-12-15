@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strconv"
 
+	"github.com/davecgh/go-xdr/xdr2"
 	log "gopkg.in/sirupsen/logrus.v0"
 )
 
@@ -110,18 +111,25 @@ func (server *TCPServer) handleCall(conn net.Conn) {
 
 	// Call bound function
 	funcType := reflect.TypeOf(receiverFunc)
-	funcArgType := funcType.In(0)
-	funcArg := reflect.New(funcArgType).Interface()
+	funcArg := reflect.New(funcType.In(0)).Interface()
 
-	err = ReadArguments(conn, funcArg)
-	if err != nil {
+	if _, err := xdr.Unmarshal(conn, &funcArg); err != nil {
 		log.Error(err)
 
 		return
 	}
 
 	funcValue := reflect.ValueOf(receiverFunc)
-	funcArgValue := reflect.ValueOf(funcArg)
+	funcArgValue := reflect.Indirect(reflect.ValueOf(funcArg))
+	funcRetValue := reflect.New(funcType.In(1).Elem())
 
-	funcValue.Call([]reflect.Value{reflect.Indirect(funcArgValue)})
+	funcValue.Call([]reflect.Value{funcArgValue, funcRetValue})
+
+	// Write reply
+	// FIXME: We are assuming it is always "successful".
+	if err := WriteTCPReply(conn, reflect.Indirect(funcRetValue).Interface()); err != nil {
+		log.Error(err)
+
+		return
+	}
 }
