@@ -5,17 +5,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"time"
 
 	"github.com/davecgh/go-xdr/xdr2"
 )
 
 var (
-	ErrArgumentsExpected           = errors.New("rpc call: unable to read procedure arguments")
 	ErrCallMessageBodyExpected     = errors.New("rpc call: call message body expected")
 	ErrCallMessageExpected         = errors.New("rpc call: call message expected")
 	ErrHeaderExpected              = errors.New("rpc call: header expected")
-	ErrIncompleteMessage           = errors.New("rpc call: cannot read the whole message")
 	ErrRPCVersion2Expected         = errors.New("rpc call: trying to read an RPC call of unsupported version")
 	ErrUnsupportedMultipleFragment = errors.New("rpc call: fragmented requests are not supported")
 )
@@ -50,66 +47,47 @@ func ParseRecordMarker(marker uint32) (size uint32, last bool) {
 	return size, last
 }
 
-// ReadCall reads an incoming "call" message from the given reader. Args should be a reference to a
-// structure holding any arguments accepted by the remote procedure.
-func ReadCall(r io.Reader, args interface{}) error {
+// ReadTCPCallMessage reads an incoming "call" message from the given reader, returning the parsed
+// RPC call message structure, without the common RPC header.
+func ReadTCPCallMessage(r io.Reader) (*CallMessage, error) {
 	var marker uint32
 
 	err := binary.Read(r, binary.LittleEndian, &marker)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	size, last := ParseRecordMarker(marker)
+	_, last := ParseRecordMarker(marker)
 
 	if !last {
-		return ErrUnsupportedMultipleFragment
+		return nil, ErrUnsupportedMultipleFragment
 	}
-
-	read := 0
 
 	// Read RPC message header
 	message := Message{}
-	bytesRead, err := xdr.Unmarshal(r, &message)
+	_, err = xdr.Unmarshal(r, &message)
 	if err != nil {
-		return ErrHeaderExpected
+		return nil, ErrHeaderExpected
 	}
-
-	read += bytesRead
 
 	// Make sure this is a "Call" message
 	if message.Type != Call {
-		return ErrCallMessageExpected
+		return nil, ErrCallMessageExpected
 	}
 
 	// Read RPC call body
 	callBody := CallMessage{}
-	bytesRead, err = xdr.Unmarshal(r, &callBody)
+	_, err = xdr.Unmarshal(r, &callBody)
 	if err != nil {
-		return ErrCallMessageBodyExpected
+		return nil, ErrCallMessageBodyExpected
 	}
-
-	read += bytesRead
 
 	// We can only read RPCv2 messages
 	if callBody.RPCVersion != 2 {
-		return ErrRPCVersion2Expected
+		return nil, ErrRPCVersion2Expected
 	}
 
-	// Read RPC call arguments
-	bytesRead, err = xdr.Unmarshal(r, &args)
-	if err != nil {
-		return ErrArgumentsExpected
-	}
-
-	read += bytesRead
-
-	// We must have read exactly the amount of data reported in the record marker
-	if read != int(size) {
-		return ErrIncompleteMessage
-	}
-
-	return nil
+	return &callBody, nil
 }
 
 // WriteCall writes an RPC "call" message to the given writer in order to call a remote procedure
@@ -119,10 +97,7 @@ func WriteCall(w io.Writer, program uint32, version uint32, proc uint32, args in
 	var buf bytes.Buffer
 
 	// Write message header to the buffer
-	header := Message{
-		Xid:  uint32(time.Now().Unix()),
-		Type: Call,
-	}
+	header := NewMessage(Call)
 
 	_, err := xdr.Marshal(&buf, header)
 	if err != nil {
