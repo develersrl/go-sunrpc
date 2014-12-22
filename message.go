@@ -1,16 +1,24 @@
 package sunrpc
 
-import (
-	"errors"
-	"time"
-)
-
-var (
-	ErrIncompleteMessage = errors.New("rpc call: unable to read the whole message")
-)
+import "time"
 
 //
-// RPC Message Header
+// Authorization Data
+//
+
+type AuthFlavor int32
+
+const (
+	AuthFlavorNone AuthFlavor = 0
+)
+
+type OpaqueAuth struct {
+	Flavor AuthFlavor
+	Body   []byte // Must be between 0 and 400 bytes
+}
+
+//
+// RPC Message
 //
 
 type MessageType int32
@@ -25,30 +33,24 @@ type Message struct {
 	Type MessageType
 }
 
-func NewMessage(t MessageType) *Message {
-	return &Message{
-		Xid:  uint32(time.Now().Unix()),
-		Type: t,
-	}
-}
-
 //
 // Call
 //
 
-type CallMessage struct {
+type CallBody struct {
 	RPCVersion uint32
 	Program    uint32
 	Version    uint32
 	Procedure  uint32
-	Cred       [2]uint32 // Dummy
-	Verf       [2]uint32 // Dummy
+	Cred       OpaqueAuth
+	Verf       OpaqueAuth
 }
 
 //
 // Reply
 //
 
+// ReplyType is the kind of RPC "reply" message.
 type ReplyType int32
 
 const (
@@ -56,7 +58,7 @@ const (
 	Denied   ReplyType = 1
 )
 
-type ReplyMessage struct {
+type ReplyBody struct {
 	Type ReplyType
 }
 
@@ -67,6 +69,34 @@ const (
 )
 
 type AcceptedReply struct {
-	Verf [2]uint32 // Dummy
+	Verf OpaqueAuth
 	Type AcceptType
+}
+
+//
+// Convenience: Procedure Call
+//
+
+// ProcedureCall combines the RPC Message header with RPC Call body (except for function arguments)
+// for convenience during (de)serialization.
+type ProcedureCall struct {
+	Header Message
+	Body   CallBody
+}
+
+// NewProcedureCall creates a new RPC call packet with a transaction ID derived from the current
+// UNIX time stamp.
+func NewProcedureCall(program uint32, version uint32, procedure uint32) *ProcedureCall {
+	return &ProcedureCall{
+		Header: Message{
+			Xid:  uint32(time.Now().Unix()),
+			Type: Call,
+		},
+		Body: CallBody{
+			RPCVersion: 2,
+			Program:    program,
+			Version:    version,
+			Procedure:  procedure,
+		},
+	}
 }

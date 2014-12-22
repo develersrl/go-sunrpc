@@ -1,17 +1,19 @@
 package sunrpc
 
 import (
-	"errors"
 	"net"
 	"reflect"
 	"strconv"
 
 	"github.com/davecgh/go-xdr/xdr2"
-	log "gopkg.in/sirupsen/logrus.v0"
+	"gopkg.in/sirupsen/logrus.v0"
 )
 
 var (
-	ErrCannotPortmap = errors.New("cannot set port with portmapper")
+	tcpLog = logrus.WithFields(logrus.Fields{
+		"package": "sunrpc",
+		"server":  "tcp",
+	})
 )
 
 type TCPServer struct {
@@ -20,7 +22,7 @@ type TCPServer struct {
 	procedures map[uint32]interface{}
 }
 
-func NewServer(program uint32, version uint32) *TCPServer {
+func NewTCPServer(program uint32, version uint32) *TCPServer {
 	return &TCPServer{
 		program:    program,
 		version:    version,
@@ -77,34 +79,36 @@ func (server *TCPServer) handleCall(conn net.Conn) {
 	// Read message envelope
 	call, err := ReadTCPCallMessage(conn)
 	if err != nil {
-		log.WithField("err", err).Error("Cannot read RPC Call message")
+		tcpLog.WithField("err", err).Error("Cannot read RPC Call message")
 
 		return
 	}
 
-	if call.Program != server.program {
-		log.WithFields(log.Fields{
+	if call.Body.Program != server.program {
+		tcpLog.WithFields(logrus.Fields{
 			"expected": server.program,
-			"was":      call.Program,
+			"was":      call.Body.Program,
 		}).Error("Mismatched program number")
 
 		return
 	}
 
-	if call.Version != server.version {
-		log.WithFields(log.Fields{
+	if call.Body.Version != server.version {
+		tcpLog.WithFields(logrus.Fields{
 			"expected": server.version,
-			"was":      call.Version,
+			"was":      call.Body.Version,
 		}).Error("Mismatched program version")
 
 		return
 	}
 
 	// Determine procedure call
-	receiverFunc, ok := server.procedures[call.Procedure]
+	tcpLog.WithField("procedure", call.Body.Procedure).Debug("Calling procedure")
+
+	receiverFunc, ok := server.procedures[call.Body.Procedure]
 
 	if !ok {
-		log.WithField("procedure", call.Procedure).Error("Cannot find procedure")
+		tcpLog.WithField("procedure", call.Body.Procedure).Error("Cannot find procedure")
 
 		return
 	}
@@ -114,7 +118,7 @@ func (server *TCPServer) handleCall(conn net.Conn) {
 	funcArg := reflect.New(funcType.In(0)).Interface()
 
 	if _, err := xdr.Unmarshal(conn, &funcArg); err != nil {
-		log.Error(err)
+		tcpLog.Error(err)
 
 		return
 	}
@@ -127,8 +131,8 @@ func (server *TCPServer) handleCall(conn net.Conn) {
 
 	// Write reply
 	// FIXME: We are assuming it is always "successful".
-	if err := WriteTCPReply(conn, reflect.Indirect(funcRetValue).Interface()); err != nil {
-		log.Error(err)
+	if err := WriteTCPReplyMessage(conn, call.Header.Xid, funcRetValue.Interface()); err != nil {
+		tcpLog.Error(err)
 
 		return
 	}

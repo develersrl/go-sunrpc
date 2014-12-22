@@ -3,18 +3,7 @@ package sunrpc
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"io"
-
-	"github.com/davecgh/go-xdr/xdr2"
-)
-
-var (
-	ErrCallMessageBodyExpected     = errors.New("rpc call: call message body expected")
-	ErrCallMessageExpected         = errors.New("rpc call: call message expected")
-	ErrHeaderExpected              = errors.New("rpc call: header expected")
-	ErrRPCVersion2Expected         = errors.New("rpc call: trying to read an RPC call of unsupported version")
-	ErrUnsupportedMultipleFragment = errors.New("rpc call: fragmented requests are not supported")
 )
 
 // NewRecordMarker creates a new record marker as described in RFC 5531.
@@ -49,7 +38,7 @@ func ParseRecordMarker(marker uint32) (size uint32, last bool) {
 
 // ReadTCPCallMessage reads an incoming "call" message from the given reader, returning the parsed
 // RPC call message structure, without the common RPC header.
-func ReadTCPCallMessage(r io.Reader) (*CallMessage, error) {
+func ReadTCPCallMessage(r io.Reader) (*ProcedureCall, error) {
 	var marker uint32
 
 	err := binary.Read(r, binary.LittleEndian, &marker)
@@ -63,105 +52,29 @@ func ReadTCPCallMessage(r io.Reader) (*CallMessage, error) {
 		return nil, ErrUnsupportedMultipleFragment
 	}
 
-	// Read RPC message header
-	message := Message{}
-	_, err = xdr.Unmarshal(r, &message)
-	if err != nil {
-		return nil, ErrHeaderExpected
-	}
-
-	// Make sure this is a "Call" message
-	if message.Type != Call {
-		return nil, ErrCallMessageExpected
-	}
-
-	// Read RPC call body
-	callBody := CallMessage{}
-	_, err = xdr.Unmarshal(r, &callBody)
-	if err != nil {
-		return nil, ErrCallMessageBodyExpected
-	}
-
-	// We can only read RPCv2 messages
-	if callBody.RPCVersion != 2 {
-		return nil, ErrRPCVersion2Expected
-	}
-
-	return &callBody, nil
+	return ReadProcedureCall(r)
 }
 
-// WriteCall writes an RPC "call" message to the given writer in order to call a remote procedure
-// with the given program, version and procedure identifiers. Args holds the arguments to pass to
-// the remote procedure.
-func WriteCall(w io.Writer, program uint32, version uint32, proc uint32, args interface{}) error {
+func WriteTCPReplyMessage(w io.Writer, xid uint32, ret interface{}) error {
+	// Buffer reply data so that we can compute a proper record marker later on
 	var buf bytes.Buffer
 
-	// Write message header to the buffer
-	header := NewMessage(Call)
-
-	_, err := xdr.Marshal(&buf, header)
+	size, err := WriteReplyMessage(&buf, xid, ret)
 	if err != nil {
 		return err
 	}
 
-	// Write call message to the buffer
-	call := CallMessage{
-		RPCVersion: 2,
-		Program:    program,
-		Version:    version,
-		Procedure:  proc,
-	}
+	// Write the record marker
+	//
+	// FIXME: Assuming we are sending a single record
+	record := NewRecordMarker(uint32(size), true)
 
-	_, err = xdr.Marshal(&buf, call)
-	if err != nil {
+	if err := binary.Write(w, binary.BigEndian, record); err != nil {
 		return err
 	}
 
-	// Write procedure arguments to the buffer
-	_, err = xdr.Marshal(&buf, &args)
-	if err != nil {
-		return err
-	}
-
-	// Write the record marker before sending the payload
-	bytes := buf.Bytes()
-
-	err = binary.Write(w, binary.LittleEndian, NewRecordMarker(uint32(len(bytes)), true))
-	if err != nil {
-		return err
-	}
-
-	// Send the payload
-	_, err = w.Write(bytes)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func WriteTCPReply(w io.Writer, ret interface{}) error {
-	var buf bytes.Buffer
-
-	// Header
-	header := NewMessage(Reply)
-
-	if _, err := xdr.Marshal(&buf, header); err != nil {
-		return err
-	}
-
-	// "Accepted"
-	if _, err := xdr.Marshal(&buf, ReplyMessage{Type: Accepted}); err != nil {
-		return err
-	}
-
-	// "Success"
-	if _, err := xdr.Marshal(&buf, AcceptedReply{Type: Success}); err != nil {
-		return err
-	}
-
-	// Return data
-	if _, err := xdr.Marshal(&buf, ret); err != nil {
+	// Write the payload
+	if _, err := w.Write(buf.Bytes()); err != nil {
 		return err
 	}
 
