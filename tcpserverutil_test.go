@@ -48,6 +48,27 @@ func TestParseRecordMarker(t *testing.T) {
 	assert.True(t, last)
 }
 
+func TestReadRecordMarker(t *testing.T) {
+	buf := bytes.NewBuffer([]byte{0x80, 0x00, 0x00, 0x38})
+
+	size, last, err := ReadRecordMarker(buf)
+
+	assert.Equal(t, 56, size)
+	assert.True(t, last)
+	assert.Nil(t, err)
+}
+
+func TestWriteRecordMarker(t *testing.T) {
+	var buf bytes.Buffer
+
+	expected := []byte{0x80, 0x00, 0x00, 0x38}
+
+	err := WriteRecordMarker(&buf, 56, true)
+
+	assert.Nil(t, err)
+	assert.Equal(t, expected, buf.Bytes())
+}
+
 func TestReadTCPCallMessage(t *testing.T) {
 	buf := bytes.NewBuffer([]byte{
 		0x80, 0x00, 0x00, 0x38 /**/, 0x54, 0x88, 0x7d, 0x26,

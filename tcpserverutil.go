@@ -36,17 +36,39 @@ func ParseRecordMarker(marker uint32) (size uint32, last bool) {
 	return size, last
 }
 
+// ReadRecordMarker reads the record marker from the given Reader with the appropriate endianness.
+func ReadRecordMarker(r io.Reader) (size uint32, last bool, err error) {
+	var marker uint32
+
+	if err := binary.Read(r, binary.BigEndian, &marker); err != nil {
+		return 0, true, err
+	}
+
+	size, last = ParseRecordMarker(marker)
+
+	return size, last, nil
+}
+
+// WriteRecordMarker writes the a record marker to a Writer with the given size and "last fragment"
+// indicator with the appropriate endianness.
+func WriteRecordMarker(w io.Writer, size uint32, last bool) error {
+	record := NewRecordMarker(uint32(size), true)
+
+	if err := binary.Write(w, binary.BigEndian, record); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // ReadTCPCallMessage reads an incoming "call" message from the given reader, returning the parsed
 // RPC call message structure, without the common RPC header.
 func ReadTCPCallMessage(r io.Reader) (*ProcedureCall, error) {
-	var marker uint32
+	_, last, err := ReadRecordMarker(r)
 
-	err := binary.Read(r, binary.BigEndian, &marker)
 	if err != nil {
 		return nil, err
 	}
-
-	_, last := ParseRecordMarker(marker)
 
 	if !last {
 		return nil, ErrUnsupportedMultipleFragment
@@ -67,9 +89,7 @@ func WriteTCPReplyMessage(w io.Writer, xid uint32, ret interface{}) error {
 	// Write the record marker
 	//
 	// FIXME: Assuming we are sending a single record
-	record := NewRecordMarker(uint32(size), true)
-
-	if err := binary.Write(w, binary.BigEndian, record); err != nil {
+	if err := WriteRecordMarker(w, uint32(size), true); err != nil {
 		return err
 	}
 
