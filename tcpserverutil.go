@@ -77,6 +77,8 @@ func ReadTCPCallMessage(r io.Reader) (*ProcedureCall, error) {
 	return ReadProcedureCall(r)
 }
 
+// WriteTCPReplyMessage writes an outgoing "reply" message with the appropriate framing structure
+// required by RPC-over-TCP.
 func WriteTCPReplyMessage(w io.Writer, xid uint32, ret interface{}) error {
 	// Buffer reply data so that we can compute a proper record marker later on
 	var buf bytes.Buffer
