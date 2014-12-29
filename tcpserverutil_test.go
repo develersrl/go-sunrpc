@@ -61,7 +61,7 @@ func TestReadTCPCallMessage(t *testing.T) {
 	call, err := ReadTCPCallMessage(buf)
 
 	assert.Nil(t, err)
-	assert.Equal(t, PortmapperProgram, call.Program)
-	assert.Equal(t, PortmapperVersion, call.Version)
-	assert.Equal(t, PortmapperPortSet, call.Procedure)
+	assert.Equal(t, PortmapperProgram, call.Body.Program)
+	assert.Equal(t, PortmapperVersion, call.Body.Version)
+	assert.Equal(t, PortmapperPortSet, call.Body.Procedure)
 }
