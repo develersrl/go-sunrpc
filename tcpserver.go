@@ -62,11 +62,14 @@ func (server *TCPServer) Serve(addr string) error {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
-				// Ignore broken call
+				tcpLog.WithField("err", err).Error("Unable to accept incoming connection. Ignoring")
+
 				continue
 			}
 
-			go server.handleCall(conn)
+			tcpLog.WithField("from", conn.RemoteAddr().String()).Debug("Client connected")
+
+			server.handleCall(conn)
 		}
 	}()
 
@@ -74,66 +77,66 @@ func (server *TCPServer) Serve(addr string) error {
 }
 
 func (server *TCPServer) handleCall(conn net.Conn) {
-	defer conn.Close()
+	for {
+		// Read message envelope
+		call, err := ReadTCPCallMessage(conn)
+		if err != nil {
+			tcpLog.WithField("err", err).Error("Cannot read RPC Call message")
 
-	// Read message envelope
-	call, err := ReadTCPCallMessage(conn)
-	if err != nil {
-		tcpLog.WithField("err", err).Error("Cannot read RPC Call message")
+			return
+		}
 
-		return
-	}
+		if call.Body.Program != server.program {
+			tcpLog.WithFields(logrus.Fields{
+				"expected": server.program,
+				"was":      call.Body.Program,
+			}).Error("Mismatched program number")
 
-	if call.Body.Program != server.program {
-		tcpLog.WithFields(logrus.Fields{
-			"expected": server.program,
-			"was":      call.Body.Program,
-		}).Error("Mismatched program number")
+			return
+		}
 
-		return
-	}
+		if call.Body.Version != server.version {
+			tcpLog.WithFields(logrus.Fields{
+				"expected": server.version,
+				"was":      call.Body.Version,
+			}).Error("Mismatched program version")
 
-	if call.Body.Version != server.version {
-		tcpLog.WithFields(logrus.Fields{
-			"expected": server.version,
-			"was":      call.Body.Version,
-		}).Error("Mismatched program version")
+			return
+		}
 
-		return
-	}
+		// Determine procedure call
+		tcpLog.WithField("procedure", call.Body.Procedure).Debug("Calling procedure")
 
-	// Determine procedure call
-	tcpLog.WithField("procedure", call.Body.Procedure).Debug("Calling procedure")
+		receiverFunc, ok := server.procedures[call.Body.Procedure]
 
-	receiverFunc, ok := server.procedures[call.Body.Procedure]
+		if !ok {
+			tcpLog.WithField("procedure", call.Body.Procedure).Error("Cannot find procedure")
 
-	if !ok {
-		tcpLog.WithField("procedure", call.Body.Procedure).Error("Cannot find procedure")
+			return
+		}
 
-		return
-	}
+		// Call bound function
+		funcType := reflect.TypeOf(receiverFunc)
+		funcArg := reflect.New(funcType.In(0)).Interface()
 
-	// Call bound function
-	funcType := reflect.TypeOf(receiverFunc)
-	funcArg := reflect.New(funcType.In(0)).Interface()
+		if _, err := xdr.Unmarshal(conn, &funcArg); err != nil {
+			tcpLog.Error(err)
 
-	if _, err := xdr.Unmarshal(conn, &funcArg); err != nil {
-		tcpLog.Error(err)
+			return
+		}
 
-		return
-	}
+		funcValue := reflect.ValueOf(receiverFunc)
+		funcArgValue := reflect.Indirect(reflect.ValueOf(funcArg))
+		funcRetValue := reflect.New(funcType.In(1).Elem())
 
-	funcValue := reflect.ValueOf(receiverFunc)
-	funcArgValue := reflect.Indirect(reflect.ValueOf(funcArg))
-	funcRetValue := reflect.New(funcType.In(1).Elem())
+		funcValue.Call([]reflect.Value{funcArgValue, funcRetValue})
 
-	funcValue.Call([]reflect.Value{funcArgValue, funcRetValue})
+		// Write reply
+		// FIXME: We are assuming it is always "successful".
+		if err := WriteTCPReplyMessage(conn, call.Header.Xid, funcRetValue.Interface()); err != nil {
+			tcpLog.Error(err)
 
-	// Write reply
-	// FIXME: We are assuming it is always "successful".
-	if err := WriteTCPReplyMessage(conn, call.Header.Xid, funcRetValue.Interface()); err != nil {
-		tcpLog.Error(err)
-
-		return
+			return
+		}
 	}
 }
