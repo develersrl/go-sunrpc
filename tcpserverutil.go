@@ -41,7 +41,7 @@ func ParseRecordMarker(marker uint32) (size uint32, last bool) {
 func ReadTCPCallMessage(r io.Reader) (*ProcedureCall, error) {
 	var marker uint32
 
-	err := binary.Read(r, binary.LittleEndian, &marker)
+	err := binary.Read(r, binary.BigEndian, &marker)
 	if err != nil {
 		return nil, err
 	}
