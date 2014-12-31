@@ -59,11 +59,6 @@ func (server *UDPServer) Serve(addr string) error {
 		return err
 	}
 
-	udpLog.WithFields(logrus.Fields{
-		"host": host,
-		"port": port,
-	}).Debug("Server started")
-
 	// Bind to RPCBIND server
 	if err := PortmapperSet(server.program, server.version, Udp, uint32(port)); err != nil {
 		return err
