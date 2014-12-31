@@ -3,6 +3,7 @@ package sunrpc
 import (
 	"bytes"
 	"io"
+	"reflect"
 
 	"github.com/davecgh/go-xdr/xdr2"
 )
@@ -61,4 +62,36 @@ func WriteReplyMessage(w io.Writer, xid uint32, ret interface{}) (int, error) {
 	}
 
 	return w.Write(buf.Bytes())
+}
+
+// callFunc Resolves and calls a real Go function given a procedure ID. The method must look
+// schematically like this (but no checks are made at runtime):
+//
+//     func (t *T) MethodName(argType T1, replyType *T2) error
+func callFunc(r io.Reader, table map[uint32]interface{}, proc uint32) (interface{}, error) {
+	// Resolve function type from function table
+	receiverFunc, found := table[proc]
+	if !found {
+		return nil, errUnknownFunction
+	}
+
+	// Resolve function's type
+	funcType := reflect.TypeOf(receiverFunc)
+
+	// Deserialize arguments read from procedure call body
+	funcArg := reflect.New(funcType.In(0)).Interface()
+
+	if _, err := xdr.Unmarshal(r, &funcArg); err != nil {
+		return nil, err
+	}
+
+	// Call function
+	funcValue := reflect.ValueOf(receiverFunc)
+	funcArgValue := reflect.Indirect(reflect.ValueOf(funcArg))
+	funcRetValue := reflect.New(funcType.In(1).Elem())
+
+	funcValue.Call([]reflect.Value{funcArgValue, funcRetValue})
+
+	// Return result computed by the actual function. This should be sent back to the remote caller.
+	return funcRetValue.Interface(), nil
 }

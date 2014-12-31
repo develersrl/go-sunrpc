@@ -3,10 +3,8 @@ package sunrpc
 import (
 	"bytes"
 	"net"
-	"reflect"
 	"strconv"
 
-	"github.com/davecgh/go-xdr/xdr2"
 	"gopkg.in/sirupsen/logrus.v0"
 )
 
@@ -118,45 +116,29 @@ func (server *UDPServer) handleCall(conn *net.UDPConn) {
 		return
 	}
 
-	// Determine procedure call
+	// Function Call
 	udpLog.WithField("procedure", call.Body.Procedure).Debug("Procedure call")
 
-	receiverFunc, ok := server.procedures[call.Body.Procedure]
-
-	if !ok {
-		udpLog.WithField("procedure", call.Body.Procedure).Error("Cannot find procedure")
-
-		return
-	}
-
-	// Call bound function
-	funcType := reflect.TypeOf(receiverFunc)
-	funcArg := reflect.New(funcType.In(0)).Interface()
-
-	if _, err := xdr.Unmarshal(buf, &funcArg); err != nil {
-		udpLog.Error(err)
+	ret, err := callFunc(buf, server.procedures, call.Body.Procedure)
+	if err != nil {
+		udpLog.WithField("err", err).Error("Unable to perform procedure call")
 
 		return
 	}
 
-	funcValue := reflect.ValueOf(receiverFunc)
-	funcArgValue := reflect.Indirect(reflect.ValueOf(funcArg))
-	funcRetValue := reflect.New(funcType.In(1).Elem())
-
-	funcValue.Call([]reflect.Value{funcArgValue, funcRetValue})
-
-	// Write reply to buffer (needed because we will need to use conn.WriteToUDP instead of a simple
-	// Write() later on).
+	// Send response to client.
+	//
+	// We can't use a simple Write() here, thus we have to buffer our payload and then send
+	// everything with WriteToUDP().
 	//
 	// FIXME: We are assuming it is always "successful".
 	var replyBuf bytes.Buffer
-	if _, err := WriteReplyMessage(&replyBuf, call.Header.Xid, funcRetValue.Interface()); err != nil {
+	if _, err := WriteReplyMessage(&replyBuf, call.Header.Xid, ret); err != nil {
 		udpLog.WithField("err", err).Error("Cannot write reply to buffer")
 
 		return
 	}
 
-	// Send reply to caller.
 	if _, err := conn.WriteToUDP(replyBuf.Bytes(), callerAddr); err != nil {
 		udpLog.WithFields(logrus.Fields{
 			"callerAddr": callerAddr.String(),

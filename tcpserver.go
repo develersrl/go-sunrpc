@@ -2,10 +2,8 @@ package sunrpc
 
 import (
 	"net"
-	"reflect"
 	"strconv"
 
-	"github.com/davecgh/go-xdr/xdr2"
 	"gopkg.in/sirupsen/logrus.v0"
 )
 
@@ -78,7 +76,6 @@ func (server *TCPServer) Serve(addr string) error {
 
 func (server *TCPServer) handleCall(conn net.Conn) {
 	for {
-		// Read message envelope
 		call, err := ReadTCPCallMessage(conn)
 		if err != nil {
 			tcpLog.WithField("err", err).Error("Cannot read RPC Call message")
@@ -104,36 +101,18 @@ func (server *TCPServer) handleCall(conn net.Conn) {
 			return
 		}
 
-		// Determine procedure call
 		tcpLog.WithField("procedure", call.Body.Procedure).Debug("Calling procedure")
 
-		receiverFunc, ok := server.procedures[call.Body.Procedure]
-
-		if !ok {
-			tcpLog.WithField("procedure", call.Body.Procedure).Error("Cannot find procedure")
-
-			return
-		}
-
-		// Call bound function
-		funcType := reflect.TypeOf(receiverFunc)
-		funcArg := reflect.New(funcType.In(0)).Interface()
-
-		if _, err := xdr.Unmarshal(conn, &funcArg); err != nil {
-			tcpLog.Error(err)
+		ret, err := callFunc(conn, server.procedures, call.Body.Procedure)
+		if err != nil {
+			udpLog.WithField("err", err).Error("Unable to perform procedure call")
 
 			return
 		}
-
-		funcValue := reflect.ValueOf(receiverFunc)
-		funcArgValue := reflect.Indirect(reflect.ValueOf(funcArg))
-		funcRetValue := reflect.New(funcType.In(1).Elem())
-
-		funcValue.Call([]reflect.Value{funcArgValue, funcRetValue})
 
 		// Write reply
 		// FIXME: We are assuming it is always "successful".
-		if err := WriteTCPReplyMessage(conn, call.Header.Xid, funcRetValue.Interface()); err != nil {
+		if err := WriteTCPReplyMessage(conn, call.Header.Xid, ret); err != nil {
 			tcpLog.Error(err)
 
 			return
