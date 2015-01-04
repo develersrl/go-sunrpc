@@ -1,6 +1,6 @@
 package sunrpc
 
-import "gopkg.in/sirupsen/logrus.v0"
+import "github.com/Sirupsen/logrus"
 
 var (
 	log = logrus.WithField("package", "sunrpc")
