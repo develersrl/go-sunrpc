@@ -105,7 +105,7 @@ func (server *TCPServer) handleCall(conn net.Conn) {
 
 		ret, err := callFunc(conn, server.procedures, call.Body.Procedure)
 		if err != nil {
-			udpLog.WithField("err", err).Error("Unable to perform procedure call")
+			tcpLog.WithField("err", err).Error("Unable to perform procedure call")
 
 			return
 		}
