@@ -73,6 +73,8 @@ func (server *TCPServer) Serve(addr string) error {
 }
 
 func (server *TCPServer) handleCall(conn net.Conn) {
+	defer conn.Close()
+
 	for {
 		call, err := ReadTCPCallMessage(conn)
 		if err != nil {
