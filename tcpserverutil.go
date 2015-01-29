@@ -68,12 +68,12 @@ func WriteRecordMarker(w io.Writer, size uint32, last bool) error {
 func ReadTCPCallMessage(r io.Reader) (*ProcedureCall, error) {
 	size, last, err := ReadRecordMarker(r)
 
-	if size < 1 {
-		return nil, errors.New("A TCP record must be at least one byte in size")
-	}
-
 	if err != nil {
 		return nil, errors.Wrap(err, "Could not read the TCP record marker")
+	}
+
+	if size < 1 {
+		return nil, errors.New("A TCP record must be at least one byte in size")
 	}
 
 	if !last {
