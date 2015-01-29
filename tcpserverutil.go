@@ -4,8 +4,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"io/ioutil"
 
 	"github.com/dropbox/godropbox/errors"
+)
+
+const (
+	maxRecordSize = 32 * 1024
 )
 
 // NewRecordMarker creates a new record marker as described in RFC 5531.
@@ -61,6 +66,35 @@ func WriteRecordMarker(w io.Writer, size uint32, last bool) error {
 	}
 
 	return nil
+}
+
+// ReadRecords reads a whole record into memory (up to 32 KB), otherwise the record is discarded.
+// TODO: Write a test for this and remove ReadTCPCallMessage
+func ReadRecord(r io.Reader) (*bytes.Buffer, error) {
+	size, last, err := ReadRecordMarker(r)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "Could not read the TCP record marker")
+	}
+
+	if size < 1 {
+		return nil, errors.New("A TCP record must be at least one byte in size")
+	}
+
+	if !last {
+		return nil, errors.New("Records composed of multiple fragments are not supported yet")
+	}
+
+	if size >= maxRecordSize {
+		io.CopyN(ioutil.Discard, r, int64(size))
+	}
+
+	var buf bytes.Buffer
+
+	buf.Grow(int(size))
+	io.CopyN(&buf, r, int64(size))
+
+	return &buf, nil
 }
 
 // ReadTCPCallMessage reads an incoming "call" message from the given reader, returning the parsed

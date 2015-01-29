@@ -76,7 +76,13 @@ func (server *TCPServer) handleCall(conn net.Conn) {
 	defer conn.Close()
 
 	for {
-		call, err := ReadTCPCallMessage(conn)
+		// Make sure to read a whole record at a time.
+		record, err := ReadRecord(conn)
+		if err != nil {
+			tcpLog.WithField("err", err).Error("Unable to read a record")
+		}
+
+		call, err := ReadProcedureCall(record)
 		if err != nil {
 			tcpLog.WithField("err", err).Error("Cannot read RPC Call message")
 
@@ -103,7 +109,7 @@ func (server *TCPServer) handleCall(conn net.Conn) {
 
 		tcpLog.WithField("procedure", call.Body.Procedure).Debug("Calling procedure")
 
-		ret, err := callFunc(conn, server.procedures, call.Body.Procedure)
+		ret, err := callFunc(record, server.procedures, call.Body.Procedure)
 		if err != nil {
 			tcpLog.WithField("err", err).Error("Unable to perform procedure call")
 
