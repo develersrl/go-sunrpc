@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+
+	"github.com/dropbox/godropbox/errors"
 )
 
 // NewRecordMarker creates a new record marker as described in RFC 5531.
@@ -64,14 +66,18 @@ func WriteRecordMarker(w io.Writer, size uint32, last bool) error {
 // ReadTCPCallMessage reads an incoming "call" message from the given reader, returning the parsed
 // RPC call message structure, without the common RPC header.
 func ReadTCPCallMessage(r io.Reader) (*ProcedureCall, error) {
-	_, last, err := ReadRecordMarker(r)
+	size, last, err := ReadRecordMarker(r)
+
+	if size < 1 {
+		return nil, errors.New("A TCP record must be at least one byte in size")
+	}
 
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Could not read the TCP record marker")
 	}
 
 	if !last {
-		return nil, ErrUnsupportedMultipleFragment
+		return nil, errors.New("Records composed of multiple fragments are not supported yet")
 	}
 
 	return ReadProcedureCall(r)
@@ -85,19 +91,19 @@ func WriteTCPReplyMessage(w io.Writer, xid uint32, ret interface{}) error {
 
 	size, err := WriteReplyMessage(&buf, xid, ret)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Could not write the reply message to a buffer")
 	}
 
 	// Write the record marker
 	//
 	// FIXME: Assuming we are sending a single record
 	if err := WriteRecordMarker(w, uint32(size), true); err != nil {
-		return err
+		return errors.Wrap(err, "Could not write the record marker to the given io.Writer")
 	}
 
 	// Write the payload
 	if _, err := w.Write(buf.Bytes()); err != nil {
-		return err
+		return errors.Wrap(err, "Could not write the record payload to the given io.Writer")
 	}
 
 	return nil

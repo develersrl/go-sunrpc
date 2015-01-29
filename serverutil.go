@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/davecgh/go-xdr/xdr2"
+	"github.com/dropbox/godropbox/errors"
 )
 
 // ReadProcedureCall reads an RPC "call" message from the given reader, ensuring the RPC message is
@@ -15,17 +16,17 @@ func ReadProcedureCall(r io.Reader) (*ProcedureCall, error) {
 	message := ProcedureCall{}
 
 	if _, err := xdr.Unmarshal(r, &message); err != nil {
-		return nil, ErrHeaderExpected
+		return nil, errors.New("")
 	}
 
 	// Make sure this is a "Call" message
 	if message.Header.Type != Call {
-		return nil, ErrCallMessageExpected
+		return nil, errors.New("Expected a call message")
 	}
 
 	// We can only read RPCv2 messages
 	if message.Body.RPCVersion != 2 {
-		return nil, ErrRPCVersion2Expected
+		return nil, errors.New("Expected an RPC version 2 message")
 	}
 
 	return &message, nil
@@ -43,22 +44,22 @@ func WriteReplyMessage(w io.Writer, xid uint32, ret interface{}) (int, error) {
 	}
 
 	if _, err := xdr.Marshal(&buf, header); err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "Could not write the RPC message header")
 	}
 
 	// "Accepted"
 	if _, err := xdr.Marshal(&buf, ReplyBody{Type: Accepted}); err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "Could not write the reply body")
 	}
 
 	// "Success"
 	if _, err := xdr.Marshal(&buf, AcceptedReply{Type: Success}); err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "Could not write the reply body")
 	}
 
 	// Return data
 	if _, err := xdr.Marshal(&buf, ret); err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "Could not write the return value")
 	}
 
 	return w.Write(buf.Bytes())
@@ -72,7 +73,7 @@ func callFunc(r io.Reader, table map[uint32]interface{}, proc uint32) (interface
 	// Resolve function type from function table
 	receiverFunc, found := table[proc]
 	if !found {
-		return nil, errUnknownFunction
+		return nil, errors.Newf("Tried to call unknown procedure with id: %v", proc)
 	}
 
 	// Resolve function's type
@@ -82,7 +83,7 @@ func callFunc(r io.Reader, table map[uint32]interface{}, proc uint32) (interface
 	funcArg := reflect.New(funcType.In(0)).Interface()
 
 	if _, err := xdr.Unmarshal(r, &funcArg); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Could not unmarshal the arguments to pass to the procedure")
 	}
 
 	// Call function
