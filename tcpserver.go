@@ -80,6 +80,8 @@ func (server *TCPServer) handleCall(conn net.Conn) {
 		record, err := ReadRecord(conn)
 		if err != nil {
 			tcpLog.WithField("err", err).Error("Unable to read a record")
+
+			return
 		}
 
 		call, err := ReadProcedureCall(record)
