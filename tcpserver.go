@@ -65,7 +65,9 @@ func (server *TCPServer) Serve(addr string) error {
 				continue
 			}
 
-			server.handleCall(conn)
+			tcpLog.WithField("remote", conn.RemoteAddr().String()).Debug("Client connected.")
+
+			go server.handleCall(conn)
 		}
 	}()
 
