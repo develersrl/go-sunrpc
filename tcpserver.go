@@ -34,7 +34,7 @@ func (server *TCPServer) Register(proc uint32, rcvr interface{}) {
 
 func (server *TCPServer) Serve(addr string) error {
 	// Start TCP Server
-	listener, err := net.Listen("tcp", addr)
+	listener, err := net.Listen("tcp4", addr)
 	if err != nil {
 		return err
 	}

@@ -50,7 +50,7 @@ func (server *UDPServer) Serve(addr string) error {
 	}
 
 	// Start UDP Server
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP(host), Port: port})
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP(host), Port: port})
 	if err != nil {
 		return err
 	}
