@@ -19,32 +19,32 @@ func TestNewRecordMarker(t *testing.T) {
 func TestParseRecordMarker(t *testing.T) {
 	size, last := ParseRecordMarker(0)
 
-	assert.Equal(t, 0, size)
+	assert.EqualValues(t, 0, size)
 	assert.False(t, last)
 
 	size, last = ParseRecordMarker(0x80000000)
 
-	assert.Equal(t, 0, size)
+	assert.EqualValues(t, 0, size)
 	assert.True(t, last)
 
 	size, last = ParseRecordMarker(0x0002239E)
 
-	assert.Equal(t, 140190, size)
+	assert.EqualValues(t, 140190, size)
 	assert.False(t, last)
 
 	size, last = ParseRecordMarker(0x8002239E)
 
-	assert.Equal(t, 140190, size)
+	assert.EqualValues(t, 140190, size)
 	assert.True(t, last)
 
 	size, last = ParseRecordMarker(0x7FFFFFFF)
 
-	assert.Equal(t, 2147483647, size)
+	assert.EqualValues(t, 2147483647, size)
 	assert.False(t, last)
 
 	size, last = ParseRecordMarker(0xFFFFFFFF)
 
-	assert.Equal(t, 2147483647, size)
+	assert.EqualValues(t, 2147483647, size)
 	assert.True(t, last)
 }
 
@@ -53,7 +53,7 @@ func TestReadRecordMarker(t *testing.T) {
 
 	size, last, err := ReadRecordMarker(buf)
 
-	assert.Equal(t, 56, size)
+	assert.EqualValues(t, 56, size)
 	assert.True(t, last)
 	assert.Nil(t, err)
 }
@@ -83,7 +83,7 @@ func TestReadTCPCallMessage(t *testing.T) {
 	call, err := ReadProcedureCall(recordBuf)
 
 	assert.Nil(t, err)
-	assert.Equal(t, PortmapperProgram, call.Body.Program)
-	assert.Equal(t, PortmapperVersion, call.Body.Version)
-	assert.Equal(t, PortmapperPortSet, call.Body.Procedure)
+	assert.EqualValues(t, PortmapperProgram, call.Body.Program)
+	assert.EqualValues(t, PortmapperVersion, call.Body.Version)
+	assert.EqualValues(t, PortmapperPortSet, call.Body.Procedure)
 }
