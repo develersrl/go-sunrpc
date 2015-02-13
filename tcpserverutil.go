@@ -68,7 +68,7 @@ func WriteRecordMarker(w io.Writer, size uint32, last bool) error {
 	return nil
 }
 
-// ReadRecords reads a whole record into memory (up to 32 KB), otherwise the record is discarded.
+// ReadRecord reads a whole record into memory (up to 32 KB), otherwise the record is discarded.
 func ReadRecord(r io.Reader) (*bytes.Buffer, error) {
 	size, last, err := ReadRecordMarker(r)
 

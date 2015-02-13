@@ -14,12 +14,14 @@ var (
 	})
 )
 
+// TCPServer is an RPC server over TCP.
 type TCPServer struct {
 	program    uint32
 	version    uint32
 	procedures map[uint32]interface{}
 }
 
+// NewTCPServer creates a new RPC server for the given program id and program version.
 func NewTCPServer(program uint32, version uint32) *TCPServer {
 	return &TCPServer{
 		program:    program,
@@ -28,10 +30,12 @@ func NewTCPServer(program uint32, version uint32) *TCPServer {
 	}
 }
 
+// Register maps an RPC procedure id to a function.
 func (server *TCPServer) Register(proc uint32, rcvr interface{}) {
 	server.procedures[proc] = rcvr
 }
 
+// Serve starts the RPC server.
 func (server *TCPServer) Serve(addr string) error {
 	// Start TCP Server
 	listener, err := net.Listen("tcp4", addr)
@@ -73,6 +77,10 @@ func (server *TCPServer) Serve(addr string) error {
 
 	return nil
 }
+
+//
+// Private
+//
 
 func (server *TCPServer) handleCall(conn net.Conn) {
 	defer func() {

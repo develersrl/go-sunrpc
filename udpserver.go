@@ -8,23 +8,22 @@ import (
 	"github.com/Sirupsen/logrus"
 )
 
-const (
-	MaxUdpSize = 65507
-)
+// MaxUdpSize is the maximum size of an RPC message we accept over UDP.
+const MaxUdpSize = 65507
 
-var (
-	udpLog = logrus.WithFields(logrus.Fields{
-		"package": "sunrpc",
-		"server":  "udp",
-	})
-)
+var udpLog = logrus.WithFields(logrus.Fields{
+	"package": "sunrpc",
+	"server":  "udp",
+})
 
+// UDPServer is an RPC server over UDP.
 type UDPServer struct {
 	program    uint32
 	version    uint32
 	procedures map[uint32]interface{}
 }
 
+// NewUDPServer creates a new UDPServer for the given RPC program identifier and program version.
 func NewUDPServer(program uint32, version uint32) *UDPServer {
 	return &UDPServer{
 		program:    program,
@@ -33,10 +32,12 @@ func NewUDPServer(program uint32, version uint32) *UDPServer {
 	}
 }
 
+// Register binds a new RPC procedure ID to a function.
 func (server *UDPServer) Register(proc uint32, rcvr interface{}) {
 	server.procedures[proc] = rcvr
 }
 
+// Serve starts the RPC server.
 func (server *UDPServer) Serve(addr string) error {
 	// Parse and deconstruct host and port
 	host, portString, err := net.SplitHostPort(addr)
@@ -72,6 +73,10 @@ func (server *UDPServer) Serve(addr string) error {
 
 	return nil
 }
+
+//
+// Private
+//
 
 func (server *UDPServer) handleCall(conn *net.UDPConn) {
 	// Read and buffer UDP datagram

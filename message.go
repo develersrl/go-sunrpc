@@ -6,8 +6,10 @@ import "time"
 // Authorization Data
 //
 
+// AuthFlavor is an enumeration of all supported authentication flavors.
 type AuthFlavor int32
 
+// All possible authentication flavors.
 const (
 	AuthFlavorNone AuthFlavor = 0
 )
@@ -21,13 +23,16 @@ type OpaqueAuth struct {
 // RPC Message
 //
 
+// MessageType is an enumeration of all possible RPC message types.
 type MessageType int32
 
+// All possible RPC message types.
 const (
 	Call  MessageType = 0
 	Reply MessageType = 1
 )
 
+// Message is an RPC message header.
 type Message struct {
 	Xid  uint32
 	Type MessageType
@@ -37,6 +42,7 @@ type Message struct {
 // Call
 //
 
+// CallBody is the body of an RPC "Call" message.
 type CallBody struct {
 	RPCVersion uint32
 	Program    uint32
@@ -53,6 +59,7 @@ type CallBody struct {
 // ReplyType is the kind of RPC "reply" message.
 type ReplyType int32
 
+// Enumeration of all possible RPC replies.
 const (
 	Accepted ReplyType = 0
 	Denied   ReplyType = 1
@@ -62,12 +69,15 @@ type ReplyBody struct {
 	Type ReplyType
 }
 
+// AcceptType is used to tell the client how the server accepted an RPC call.
 type AcceptType int32
 
+// Enumeration of all possible RPC "Accept" messages.
 const (
 	Success AcceptType = 0
 )
 
+// AcceptedReply is the
 type AcceptedReply struct {
 	Verf OpaqueAuth
 	Type AcceptType
