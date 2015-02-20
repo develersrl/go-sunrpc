@@ -4,7 +4,7 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/lvillani/logrus"
 )
 
 var (

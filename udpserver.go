@@ -5,7 +5,7 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/lvillani/logrus"
 )
 
 // MaxUdpSize is the maximum size of an RPC message we accept over UDP.
