@@ -86,6 +86,8 @@ func ReadRecord(r io.Reader) (*bytes.Buffer, error) {
 
 	if size >= maxRecordSize {
 		io.CopyN(ioutil.Discard, r, int64(size))
+
+		return nil, errors.Newf("Discarded record exceeding maximum size of %v bytes", maxRecordSize)
 	}
 
 	var buf bytes.Buffer
