@@ -141,5 +141,10 @@ func (server *TCPServer) handleCall(conn net.Conn) {
 
 			return
 		}
+
+		// Make sure to close the connection in case of errors.
+		if acceptType == SystemErr {
+			return
+		}
 	}
 }
