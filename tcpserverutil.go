@@ -98,11 +98,11 @@ func ReadRecord(r io.Reader) (*bytes.Buffer, error) {
 
 // WriteTCPReplyMessage writes an outgoing "reply" message with the appropriate framing structure
 // required by RPC-over-TCP.
-func WriteTCPReplyMessage(w io.Writer, xid uint32, ret interface{}) error {
+func WriteTCPReplyMessage(w io.Writer, xid uint32, acceptType AcceptType, ret interface{}) error {
 	// Buffer reply data so that we can compute a proper record marker later on
 	var buf bytes.Buffer
 
-	size, err := WriteReplyMessage(&buf, xid, ret)
+	size, err := WriteReplyMessage(&buf, xid, acceptType, ret)
 	if err != nil {
 		return errors.Wrap(err, "Could not write the reply message to a buffer")
 	}

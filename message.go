@@ -74,7 +74,8 @@ type AcceptType int32
 
 // Enumeration of all possible RPC "Accept" messages.
 const (
-	Success AcceptType = 0
+	Success   AcceptType = 0
+	SystemErr AcceptType = 5
 )
 
 // AcceptedReply is the

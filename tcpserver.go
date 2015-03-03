@@ -122,18 +122,20 @@ func (server *TCPServer) handleCall(conn net.Conn) {
 			return
 		}
 
+		// Function call
 		tcpLog.WithField("procedure", call.Body.Procedure).Debug("Calling procedure")
+
+		acceptType := Success
 
 		ret, err := callFunc(record, server.procedures, call.Body.Procedure)
 		if err != nil {
 			tcpLog.WithField("err", err).Error("Unable to perform procedure call")
 
-			return
+			acceptType = SystemErr
 		}
 
-		// Write reply
-		// FIXME: We are assuming it is always "successful".
-		if err := WriteTCPReplyMessage(conn, call.Header.Xid, ret); err != nil {
+		// Send response
+		if err := WriteTCPReplyMessage(conn, call.Header.Xid, acceptType, ret); err != nil {
 			tcpLog.Error(err)
 
 			return

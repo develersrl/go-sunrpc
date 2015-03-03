@@ -119,21 +119,19 @@ func (server *UDPServer) handleCall(conn *net.UDPConn) {
 	// Function Call
 	udpLog.WithField("procedure", call.Body.Procedure).Debug("Procedure call")
 
+	acceptType := Success
+
 	ret, err := callFunc(buf, server.procedures, call.Body.Procedure)
 	if err != nil {
 		udpLog.WithField("err", err).Error("Unable to perform procedure call")
 
-		return
+		acceptType = SystemErr
 	}
 
-	// Send response to client.
-	//
-	// We can't use a simple Write() here, thus we have to buffer our payload and then send
-	// everything with WriteToUDP().
-	//
-	// FIXME: We are assuming it is always "successful".
+	// Send response
 	var replyBuf bytes.Buffer
-	if _, err := WriteReplyMessage(&replyBuf, call.Header.Xid, ret); err != nil {
+
+	if _, err := WriteReplyMessage(&replyBuf, call.Header.Xid, acceptType, ret); err != nil {
 		udpLog.WithField("err", err).Error("Cannot write reply to buffer")
 
 		return

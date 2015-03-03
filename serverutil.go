@@ -34,7 +34,7 @@ func ReadProcedureCall(r io.Reader) (*ProcedureCall, error) {
 
 // WriteReplyMessage writes an "Accepted" RPC reply of type "Success", indicating that the procedure
 // call was successful. The given return data is written right after the RPC response header.
-func WriteReplyMessage(w io.Writer, xid uint32, ret interface{}) (int, error) {
+func WriteReplyMessage(w io.Writer, xid uint32, acceptType AcceptType, ret interface{}) (int, error) {
 	var buf bytes.Buffer
 
 	// Header
@@ -53,20 +53,22 @@ func WriteReplyMessage(w io.Writer, xid uint32, ret interface{}) (int, error) {
 	}
 
 	// "Success"
-	if _, err := xdr.Marshal(&buf, AcceptedReply{Type: Success}); err != nil {
+	if _, err := xdr.Marshal(&buf, AcceptedReply{Type: acceptType}); err != nil {
 		return 0, errors.Wrap(err, "Could not write the reply body")
 	}
 
 	// Return data
-	if _, err := xdr.Marshal(&buf, ret); err != nil {
-		return 0, errors.Wrap(err, "Could not write the return value")
+	if ret != nil {
+		if _, err := xdr.Marshal(&buf, ret); err != nil {
+			return 0, errors.Wrap(err, "Could not write the return value")
+		}
 	}
 
 	return w.Write(buf.Bytes())
 }
 
 // callFunc Resolves and calls a real Go function given a procedure ID. The method must look
-// schematically like this (but no checks are made at runtime):
+// schematically like this (but no conformance checks are performed at runtime):
 //
 //     func (t *T) MethodName(argType T1, replyType *T2) error
 func callFunc(r io.Reader, table map[uint32]interface{}, proc uint32) (interface{}, error) {
@@ -90,9 +92,13 @@ func callFunc(r io.Reader, table map[uint32]interface{}, proc uint32) (interface
 	funcValue := reflect.ValueOf(receiverFunc)
 	funcArgValue := reflect.Indirect(reflect.ValueOf(funcArg))
 	funcRetValue := reflect.New(funcType.In(1).Elem())
+	funcRetError := funcValue.Call([]reflect.Value{funcArgValue, funcRetValue})[0]
 
-	funcValue.Call([]reflect.Value{funcArgValue, funcRetValue})
+	if !funcRetError.IsNil() {
+		return nil, funcRetError.Interface().(error)
+	}
 
-	// Return result computed by the actual function. This should be sent back to the remote caller.
+	// Return result computed by the actual function. This is what should be sent back to the remote
+	// caller.
 	return funcRetValue.Interface(), nil
 }
