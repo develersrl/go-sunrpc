@@ -85,6 +85,7 @@ func (server *TCPServer) Serve(addr string) error {
 func (server *TCPServer) handleCall(conn net.Conn) {
 	defer func() {
 		tcpLog.WithField("remote", conn.RemoteAddr().String()).Debug("Closing connection.")
+
 		conn.Close()
 	}()
 
