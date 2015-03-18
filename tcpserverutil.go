@@ -93,7 +93,10 @@ func ReadRecord(r io.Reader) (*bytes.Buffer, error) {
 	var buf bytes.Buffer
 
 	buf.Grow(int(size))
-	io.CopyN(&buf, r, int64(size))
+
+	if n, err := io.CopyN(&buf, r, int64(size)); err != nil {
+		return nil, errors.Newf("Unable to read entire record. Read %v, expected %v", n, size)
+	}
 
 	return &buf, nil
 }
