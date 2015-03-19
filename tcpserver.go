@@ -142,7 +142,9 @@ func (server *TCPServer) handleCall(conn net.Conn) {
 			return
 		}
 
-		// Make sure to close the connection in case of errors.
+		// Close the connection.
+		// In case the command has failed, canqd will close the connection on its side
+		// so it's ok to shut down the socket now.
 		if acceptType == SystemErr {
 			return
 		}
