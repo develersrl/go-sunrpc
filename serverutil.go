@@ -2,11 +2,12 @@ package sunrpc
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"io"
 	"reflect"
 
 	"github.com/davecgh/go-xdr/xdr2"
-	"github.com/dropbox/godropbox/errors"
 )
 
 // ReadProcedureCall reads an RPC "call" message from the given reader, ensuring the RPC message is
@@ -44,23 +45,23 @@ func WriteReplyMessage(w io.Writer, xid uint32, acceptType AcceptType, ret inter
 	}
 
 	if _, err := xdr.Marshal(&buf, header); err != nil {
-		return 0, errors.Wrap(err, "Could not write the RPC message header")
+		return 0, err
 	}
 
 	// "Accepted"
 	if _, err := xdr.Marshal(&buf, ReplyBody{Type: Accepted}); err != nil {
-		return 0, errors.Wrap(err, "Could not write the reply body")
+		return 0, err
 	}
 
 	// "Success"
 	if _, err := xdr.Marshal(&buf, AcceptedReply{Type: acceptType}); err != nil {
-		return 0, errors.Wrap(err, "Could not write the reply body")
+		return 0, err
 	}
 
 	// Return data
 	if ret != nil {
 		if _, err := xdr.Marshal(&buf, ret); err != nil {
-			return 0, errors.Wrap(err, "Could not write the return value")
+			return 0, err
 		}
 	}
 
@@ -75,7 +76,7 @@ func callFunc(r io.Reader, table map[uint32]interface{}, proc uint32) (interface
 	// Resolve function type from function table
 	receiverFunc, found := table[proc]
 	if !found {
-		return nil, errors.Newf("Tried to call unknown procedure with id: %v", proc)
+		return nil, fmt.Errorf("Tried to call unknown procedure with id: %v", proc)
 	}
 
 	// Resolve function's type
@@ -85,7 +86,7 @@ func callFunc(r io.Reader, table map[uint32]interface{}, proc uint32) (interface
 	funcArg := reflect.New(funcType.In(0)).Interface()
 
 	if _, err := xdr.Unmarshal(r, &funcArg); err != nil {
-		return nil, errors.Wrap(err, "Could not unmarshal the arguments to pass to the procedure")
+		return nil, err
 	}
 
 	// Call function

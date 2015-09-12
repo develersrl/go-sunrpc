@@ -6,7 +6,6 @@ import (
 	"io"
 
 	"github.com/davecgh/go-xdr/xdr2"
-	"github.com/dropbox/godropbox/errors"
 )
 
 // WriteCall writes an RPC "call" message to the given writer in order to call a remote procedure
@@ -16,24 +15,24 @@ func WriteCall(w io.Writer, program uint32, version uint32, proc uint32, args in
 	var buf bytes.Buffer
 
 	if _, err := xdr.Marshal(&buf, NewProcedureCall(program, version, proc)); err != nil {
-		return errors.Wrap(err, "Cannot serialize the procedure call struct")
+		return err
 	}
 
 	// Write procedure arguments to the buffer
 	if _, err := xdr.Marshal(&buf, args); err != nil {
-		return errors.Wrap(err, "Cannot marshal the procedure call arguments")
+		return err
 	}
 
 	// Write the record marker before sending the payload
 	bytes := buf.Bytes()
 
 	if err := binary.Write(w, binary.LittleEndian, NewRecordMarker(uint32(len(bytes)), true)); err != nil {
-		return errors.Wrap(err, "Cannot write the record marker")
+		return err
 	}
 
 	// Send the payload
 	if _, err := w.Write(bytes); err != nil {
-		return errors.Wrap(err, "Cannot wrap the payload")
+		return err
 	}
 
 	return nil

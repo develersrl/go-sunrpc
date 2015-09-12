@@ -3,10 +3,10 @@ package sunrpc
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
-
-	"github.com/dropbox/godropbox/errors"
 )
 
 const (
@@ -73,7 +73,7 @@ func ReadRecord(r io.Reader) (*bytes.Buffer, error) {
 	size, last, err := ReadRecordMarker(r)
 
 	if err != nil {
-		return nil, errors.Wrap(err, "Could not read the TCP record marker")
+		return nil, err
 	}
 
 	if size < 1 {
@@ -87,7 +87,7 @@ func ReadRecord(r io.Reader) (*bytes.Buffer, error) {
 	if size >= maxRecordSize {
 		io.CopyN(ioutil.Discard, r, int64(size))
 
-		return nil, errors.Newf("Discarded record exceeding maximum size of %v bytes", maxRecordSize)
+		return nil, fmt.Errorf("Discarded record exceeding maximum size of %v bytes", maxRecordSize)
 	}
 
 	var buf bytes.Buffer
@@ -95,7 +95,7 @@ func ReadRecord(r io.Reader) (*bytes.Buffer, error) {
 	buf.Grow(int(size))
 
 	if n, err := io.CopyN(&buf, r, int64(size)); err != nil {
-		return nil, errors.Newf("Unable to read entire record. Read %v, expected %v", n, size)
+		return nil, fmt.Errorf("Unable to read entire record. Read %v, expected %v", n, size)
 	}
 
 	return &buf, nil
@@ -109,19 +109,19 @@ func WriteTCPReplyMessage(w io.Writer, xid uint32, acceptType AcceptType, ret in
 
 	size, err := WriteReplyMessage(&buf, xid, acceptType, ret)
 	if err != nil {
-		return errors.Wrap(err, "Could not write the reply message to a buffer")
+		return err
 	}
 
 	// Write the record marker
 	//
 	// FIXME: Assuming we are sending a single record
 	if err := WriteRecordMarker(w, uint32(size), true); err != nil {
-		return errors.Wrap(err, "Could not write the record marker to the given io.Writer")
+		return err
 	}
 
 	// Write the payload
 	if _, err := w.Write(buf.Bytes()); err != nil {
-		return errors.Wrap(err, "Could not write the record payload to the given io.Writer")
+		return err
 	}
 
 	return nil
