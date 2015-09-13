@@ -10,6 +10,11 @@ import (
 	"github.com/davecgh/go-xdr/xdr2"
 )
 
+type Server interface {
+	Register(proc uint32, rcvr interface{})
+	Serve(string) error
+}
+
 // ReadProcedureCall reads an RPC "call" message from the given reader, ensuring the RPC message is
 // of the "call" type and specifies version '2' of the RPC protocol.
 func ReadProcedureCall(r io.Reader) (*ProcedureCall, error) {

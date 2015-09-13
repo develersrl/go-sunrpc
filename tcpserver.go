@@ -23,7 +23,7 @@ type TCPServer struct {
 }
 
 // NewTCPServer creates a new RPC server for the given program id and program version.
-func NewTCPServer(program uint32, version uint32) *TCPServer {
+func NewTCPServer(program uint32, version uint32) Server {
 	return &TCPServer{
 		program:    program,
 		version:    version,

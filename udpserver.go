@@ -24,7 +24,7 @@ type UDPServer struct {
 }
 
 // NewUDPServer creates a new UDPServer for the given RPC program identifier and program version.
-func NewUDPServer(program uint32, version uint32) *UDPServer {
+func NewUDPServer(program uint32, version uint32) Server {
 	return &UDPServer{
 		program:    program,
 		version:    version,
