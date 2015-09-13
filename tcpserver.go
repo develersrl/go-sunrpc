@@ -111,7 +111,11 @@ func (server *TCPServer) handleCall(conn net.Conn) {
 				"was":      call.Body.Program,
 			}).Error("Mismatched program number")
 
-			return
+			if err := WriteTCPReplyMessage(conn, call.Header.Xid, ProgUnavail, nil); err != nil {
+				tcpLog.Error(err)
+				return
+			}
+			continue
 		}
 
 		if call.Body.Version != server.version {
@@ -120,15 +124,33 @@ func (server *TCPServer) handleCall(conn net.Conn) {
 				"was":      call.Body.Version,
 			}).Error("Mismatched program version")
 
-			return
+			ret := ProgMismatchReply{
+				Low:  uint(server.version),
+				High: uint(server.version),
+			}
+			if err := WriteTCPReplyMessage(conn, call.Header.Xid, ProgMismatch, &ret); err != nil {
+				tcpLog.Error(err)
+				return
+			}
+			continue
 		}
 
-		// Function call
-		tcpLog.WithField("procedure", call.Body.Procedure).Debug("Calling procedure")
+		// Resolve function type from function table
+		receiverFunc, found := server.procedures[call.Body.Procedure]
+		if !found {
+			tcpLog.WithFields(logrus.Fields{
+				"proc": strconv.Itoa(int(call.Body.Procedure)),
+			}).Error("Unsupported procedure call")
+
+			if err := WriteTCPReplyMessage(conn, call.Header.Xid, ProcUnavail, nil); err != nil {
+				tcpLog.Error(err)
+				return
+			}
+			continue
+		}
 
 		acceptType := Success
-
-		ret, err := callFunc(record, server.procedures, call.Body.Procedure)
+		ret, err := callFunc(record, receiverFunc)
 		if err != nil {
 			tcpLog.WithField("err", err).Error("Unable to perform procedure call")
 

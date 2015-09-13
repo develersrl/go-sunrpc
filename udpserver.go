@@ -116,12 +116,22 @@ func (server *UDPServer) handleCall(conn *net.UDPConn) {
 		return
 	}
 
+	// Resolve function type from function table
+	receiverFunc, found := server.procedures[call.Body.Procedure]
+	if !found {
+		udpLog.WithFields(logrus.Fields{
+			"proc": strconv.Itoa(int(call.Body.Procedure)),
+		}).Error("Unsupported procedure call")
+
+		return
+	}
+
 	// Function Call
 	udpLog.WithField("procedure", call.Body.Procedure).Debug("Procedure call")
 
 	acceptType := Success
 
-	ret, err := callFunc(buf, server.procedures, call.Body.Procedure)
+	ret, err := callFunc(buf, receiverFunc)
 	if err != nil {
 		udpLog.WithField("err", err).Error("Unable to perform procedure call")
 

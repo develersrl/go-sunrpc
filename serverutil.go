@@ -72,12 +72,7 @@ func WriteReplyMessage(w io.Writer, xid uint32, acceptType AcceptType, ret inter
 // schematically like this (but no conformance checks are performed at runtime):
 //
 //     func (t *T) MethodName(argType T1, replyType *T2) error
-func callFunc(r io.Reader, table map[uint32]interface{}, proc uint32) (interface{}, error) {
-	// Resolve function type from function table
-	receiverFunc, found := table[proc]
-	if !found {
-		return nil, fmt.Errorf("Tried to call unknown procedure with id: %v", proc)
-	}
+func callFunc(r io.Reader, receiverFunc interface{}) (interface{}, error) {
 
 	// Resolve function's type
 	funcType := reflect.TypeOf(receiverFunc)

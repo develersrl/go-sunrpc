@@ -74,14 +74,23 @@ type AcceptType int32
 
 // Enumeration of all possible RPC "Accept" messages.
 const (
-	Success   AcceptType = 0
-	SystemErr AcceptType = 5
+	Success      AcceptType = 0
+	ProgUnavail             = 1
+	ProgMismatch            = 2
+	ProcUnavail             = 3
+	GarbageArgs             = 4
+	SystemErr               = 5
 )
 
 // AcceptedReply is the
 type AcceptedReply struct {
 	Verf OpaqueAuth
 	Type AcceptType
+}
+
+type ProgMismatchReply struct {
+	Low  uint
+	High uint
 }
 
 //
