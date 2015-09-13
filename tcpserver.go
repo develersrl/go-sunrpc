@@ -1,6 +1,7 @@
 package sunrpc
 
 import (
+	"io"
 	"net"
 	"strconv"
 
@@ -93,8 +94,10 @@ func (server *TCPServer) handleCall(conn net.Conn) {
 		// Make sure to read a whole record at a time.
 		record, err := ReadRecord(conn)
 		if err != nil {
+			if err == io.EOF {
+				return
+			}
 			tcpLog.WithField("err", err).Error("Unable to read a record")
-
 			return
 		}
 
