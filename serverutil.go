@@ -3,11 +3,10 @@ package sunrpc
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"reflect"
 
-	"github.com/davecgh/go-xdr/xdr2"
+	"github.com/rasky/go-xdr/xdr2"
 )
 
 type Server interface {
