@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/davecgh/go-xdr/xdr2"
+	"github.com/rasky/go-xdr/xdr2"
 )
 
 // WriteCall writes an RPC "call" message to the given writer in order to call a remote procedure
