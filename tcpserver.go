@@ -20,6 +20,7 @@ type TCPServer struct {
 	program    uint32
 	version    uint32
 	procedures map[uint32]interface{}
+	procnames  map[uint32]string
 }
 
 // NewTCPServer creates a new RPC server for the given program id and program version.
@@ -27,13 +28,19 @@ func NewTCPServer(program uint32, version uint32) Server {
 	return &TCPServer{
 		program:    program,
 		version:    version,
-		procedures: map[uint32]interface{}{},
+		procedures: make(map[uint32]interface{}),
+		procnames:  make(map[uint32]string),
 	}
 }
 
 // Register maps an RPC procedure id to a function.
 func (server *TCPServer) Register(proc uint32, rcvr interface{}) {
 	server.procedures[proc] = rcvr
+}
+
+func (server *TCPServer) RegisterWithName(proc uint32, rcvr interface{}, name string) {
+	server.procedures[proc] = rcvr
+	server.procnames[proc] = name
 }
 
 // Serve starts the RPC server.

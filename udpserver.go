@@ -21,6 +21,7 @@ type UDPServer struct {
 	program    uint32
 	version    uint32
 	procedures map[uint32]interface{}
+	procnames  map[uint32]string
 }
 
 // NewUDPServer creates a new UDPServer for the given RPC program identifier and program version.
@@ -28,13 +29,19 @@ func NewUDPServer(program uint32, version uint32) Server {
 	return &UDPServer{
 		program:    program,
 		version:    version,
-		procedures: map[uint32]interface{}{},
+		procedures: make(map[uint32]interface{}),
+		procnames:  make(map[uint32]string),
 	}
 }
 
 // Register binds a new RPC procedure ID to a function.
 func (server *UDPServer) Register(proc uint32, rcvr interface{}) {
 	server.procedures[proc] = rcvr
+}
+
+func (server *UDPServer) RegisterWithName(proc uint32, rcvr interface{}, name string) {
+	server.procedures[proc] = rcvr
+	server.procnames[proc] = name
 }
 
 // Serve starts the RPC server.

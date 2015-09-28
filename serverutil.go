@@ -11,6 +11,7 @@ import (
 
 type Server interface {
 	Register(proc uint32, rcvr interface{})
+	RegisterWithName(proc uint32, rcvr interface{}, name string)
 	Serve(string) error
 }
 
