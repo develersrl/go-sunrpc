@@ -30,9 +30,12 @@ type mapping struct {
 // PortmapperSet associates an RPC server with a Portmapper server running on the current host
 // (i.e.: 127.0.0.1).
 func PortmapperSet(program uint32, version uint32, protocol PortmapperProtocol, port uint32) error {
-	conn, err := net.Dial("udp", "127.0.0.1:111")
+	conn, err := net.Dial("tcp", "127.0.0.1:111")
 	if err != nil {
-		return err
+		conn, err = net.Dial("udp", "127.0.0.1:111")
+		if err != nil {
+			return err
+		}
 	}
 	defer conn.Close()
 
