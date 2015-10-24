@@ -70,32 +70,33 @@ func WriteRecordMarker(w io.Writer, size uint32, last bool) error {
 
 // ReadRecord reads a whole record into memory (up to 32 KB), otherwise the record is discarded.
 func ReadRecord(r io.Reader) (*bytes.Buffer, error) {
-	size, last, err := ReadRecordMarker(r)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if size < 1 {
-		return nil, errors.New("A TCP record must be at least one byte in size")
-	}
-
-	if !last {
-		return nil, errors.New("Records composed of multiple fragments are not supported yet")
-	}
-
-	if size >= maxRecordSize {
-		io.CopyN(ioutil.Discard, r, int64(size))
-
-		return nil, fmt.Errorf("Discarded record exceeding maximum size of %v bytes", maxRecordSize)
-	}
 
 	var buf bytes.Buffer
 
-	buf.Grow(int(size))
+	for {
+		size, last, err := ReadRecordMarker(r)
 
-	if n, err := io.CopyN(&buf, r, int64(size)); err != nil {
-		return nil, fmt.Errorf("Unable to read entire record. Read %v, expected %v", n, size)
+		if err != nil {
+			return nil, err
+		}
+
+		if size < 1 {
+			return nil, errors.New("A TCP record must be at least one byte in size")
+		}
+
+		if size >= maxRecordSize {
+			io.CopyN(ioutil.Discard, r, int64(size))
+
+			return nil, fmt.Errorf("Discarded record exceeding maximum size of %v bytes", maxRecordSize)
+		}
+
+		if n, err := io.CopyN(&buf, r, int64(size)); err != nil {
+			return nil, fmt.Errorf("Unable to read entire record. Read %v, expected %v", n, size)
+		}
+
+		if last {
+			break
+		}
 	}
 
 	return &buf, nil
