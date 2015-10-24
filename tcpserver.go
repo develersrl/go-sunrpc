@@ -5,7 +5,7 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/Sirupsen/logrus"
+	"gopkg.in/Sirupsen/logrus.v0"
 )
 
 var (
