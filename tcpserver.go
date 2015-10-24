@@ -150,6 +150,7 @@ func (server *TCPServer) handleCall(conn net.Conn) {
 		if !found {
 			tcpLog.WithFields(logrus.Fields{
 				"proc": strconv.Itoa(int(call.Body.Procedure)),
+				"prog": strconv.Itoa(int(call.Body.Program)),
 			}).Error("Unsupported procedure call")
 
 			if err := WriteTCPReplyMessage(conn, call.Header.Xid, ProcUnavail, nil); err != nil {
@@ -159,6 +160,10 @@ func (server *TCPServer) handleCall(conn net.Conn) {
 			continue
 		}
 
+		tcpLog.WithFields(logrus.Fields{
+			"proc": strconv.Itoa(int(call.Body.Procedure)),
+			"name": server.procnames[call.Body.Procedure],
+		}).Info("RPC ", server.procnames[call.Body.Procedure])
 		acceptType := Success
 		ret, err := callFunc(record, receiverFunc)
 		if err != nil {

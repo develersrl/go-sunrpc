@@ -93,7 +93,10 @@ func callFunc(r io.Reader, receiverFunc interface{}) (interface{}, error) {
 	funcValue := reflect.ValueOf(receiverFunc)
 	funcArgValue := reflect.Indirect(reflect.ValueOf(funcArg))
 	funcRetValue := reflect.New(funcType.In(1).Elem())
+
+	tcpLog.Infof("-> %+v", funcArgValue)
 	funcRetError := funcValue.Call([]reflect.Value{funcArgValue, funcRetValue})[0]
+	tcpLog.Infof("<- %+v", funcRetValue)
 
 	if !funcRetError.IsNil() {
 		return nil, funcRetError.Interface().(error)
