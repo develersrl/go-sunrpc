@@ -1,7 +1,6 @@
 package sunrpc
 
 import (
-	"bytes"
 	"net"
 	"strconv"
 
@@ -11,37 +10,16 @@ import (
 // MaxUdpSize is the maximum size of an RPC message we accept over UDP.
 const MaxUdpSize = 65507
 
-var udpLog = logrus.WithFields(logrus.Fields{
-	"package": "sunrpc",
-	"server":  "udp",
-})
-
 // UDPServer is an RPC server over UDP.
 type UDPServer struct {
-	program    uint32
-	version    uint32
-	procedures map[uint32]interface{}
-	procnames  map[uint32]string
+	server
 }
 
 // NewUDPServer creates a new UDPServer for the given RPC program identifier and program version.
 func NewUDPServer(program uint32, version uint32) Server {
 	return &UDPServer{
-		program:    program,
-		version:    version,
-		procedures: make(map[uint32]interface{}),
-		procnames:  make(map[uint32]string),
+		server: newServer(program, version, logrus.Fields{"proto": "udp"}),
 	}
-}
-
-// Register binds a new RPC procedure ID to a function.
-func (server *UDPServer) Register(proc uint32, rcvr interface{}) {
-	server.procedures[proc] = rcvr
-}
-
-func (server *UDPServer) RegisterWithName(proc uint32, rcvr interface{}, name string) {
-	server.procedures[proc] = rcvr
-	server.procnames[proc] = name
 }
 
 // Serve starts the RPC server.
@@ -85,77 +63,24 @@ func (server *UDPServer) Serve(addr string) error {
 // Private
 //
 
-func (server *UDPServer) handleCall(conn *net.UDPConn) {
+func (s *UDPServer) handleCall(conn *net.UDPConn) {
 	// Read and buffer UDP datagram
 	b := make([]byte, MaxUdpSize)
 
 	packetSize, callerAddr, err := conn.ReadFromUDP(b)
 	if err != nil {
-		udpLog.WithField("err", err).Error("Cannot read UDP datagram")
+		s.server.log.WithField("err", err).Error("Cannot read UDP datagram")
 
 		return
 	}
 
-	// Read message envelope
-	buf := bytes.NewBuffer(b[0:packetSize])
-	call, err := ReadProcedureCall(buf)
+	reply, err := s.server.handleRecord(b[0:packetSize])
 	if err != nil {
-		udpLog.WithField("err", err).Error("Cannot parse RPC call")
-
-		return
+		s.server.log.WithField("err", err).Error("handling record")
 	}
 
-	if call.Body.Program != server.program {
-		udpLog.WithFields(logrus.Fields{
-			"expected": server.program,
-			"was":      call.Body.Program,
-		}).Error("Mismatched program number")
-
-		return
-	}
-
-	if call.Body.Version != server.version {
-		udpLog.WithFields(logrus.Fields{
-			"expected": server.version,
-			"was":      call.Body.Version,
-		}).Error("Mismatched program version")
-
-		return
-	}
-
-	// Resolve function type from function table
-	receiverFunc, found := server.procedures[call.Body.Procedure]
-	if !found {
-		udpLog.WithFields(logrus.Fields{
-			"proc": strconv.Itoa(int(call.Body.Procedure)),
-		}).Error("Unsupported procedure call")
-
-		return
-	}
-
-	// Function Call
-	udpLog.WithField("procedure", call.Body.Procedure).Debug("Procedure call")
-
-	acceptType := Success
-
-	ret, err := callFunc(buf, receiverFunc)
-	if err != nil {
-		udpLog.WithField("err", err).Error("Unable to perform procedure call")
-
-		acceptType = SystemErr
-	}
-
-	// Send response
-	var replyBuf bytes.Buffer
-
-	if _, err := WriteReplyMessage(&replyBuf, call.Header.Xid, acceptType, ret); err != nil {
-		udpLog.WithField("err", err).Error("Cannot write reply to buffer")
-
-		return
-	}
-
-	if _, err := conn.WriteToUDP(replyBuf.Bytes(), callerAddr); err != nil {
-		udpLog.WithFields(logrus.Fields{
+	if _, err := conn.WriteToUDP(reply.Bytes(), callerAddr); err != nil {
+		s.server.log.WithFields(logrus.Fields{
 			"callerAddr": callerAddr.String(),
 			"err":        err,
 		}).Error("Cannot send reply over UDP")

@@ -40,7 +40,7 @@ func ReadProcedureCall(r io.Reader) (*ProcedureCall, error) {
 
 // WriteReplyMessage writes an "Accepted" RPC reply of type "Success", indicating that the procedure
 // call was successful. The given return data is written right after the RPC response header.
-func WriteReplyMessage(w io.Writer, xid uint32, acceptType AcceptType, ret interface{}) (int, error) {
+func (s *server) WriteReplyMessage(w io.Writer, xid uint32, acceptType AcceptType, ret interface{}) error {
 	var buf bytes.Buffer
 
 	// Header
@@ -50,34 +50,35 @@ func WriteReplyMessage(w io.Writer, xid uint32, acceptType AcceptType, ret inter
 	}
 
 	if _, err := xdr.Marshal(&buf, header); err != nil {
-		return 0, err
+		return err
 	}
 
 	// "Accepted"
 	if _, err := xdr.Marshal(&buf, ReplyBody{Type: Accepted}); err != nil {
-		return 0, err
+		return err
 	}
 
 	// "Success"
 	if _, err := xdr.Marshal(&buf, AcceptedReply{Type: acceptType}); err != nil {
-		return 0, err
+		return err
 	}
 
 	// Return data
 	if ret != nil {
 		if _, err := xdr.Marshal(&buf, ret); err != nil {
-			return 0, err
+			return err
 		}
 	}
 
-	return w.Write(buf.Bytes())
+	_, err := w.Write(buf.Bytes())
+	return err
 }
 
 // callFunc Resolves and calls a real Go function given a procedure ID. The method must look
 // schematically like this (but no conformance checks are performed at runtime):
 //
 //     func (t *T) MethodName(argType T1, replyType *T2) error
-func callFunc(r io.Reader, receiverFunc interface{}) (interface{}, error) {
+func (s *server) callFunc(r io.Reader, receiverFunc interface{}) (interface{}, error) {
 
 	// Resolve function's type
 	funcType := reflect.TypeOf(receiverFunc)
@@ -94,9 +95,9 @@ func callFunc(r io.Reader, receiverFunc interface{}) (interface{}, error) {
 	funcArgValue := reflect.Indirect(reflect.ValueOf(funcArg))
 	funcRetValue := reflect.New(funcType.In(1).Elem())
 
-	tcpLog.Infof("-> %+v", funcArgValue)
+	s.log.Infof("-> %+v", funcArgValue)
 	funcRetError := funcValue.Call([]reflect.Value{funcArgValue, funcRetValue})[0]
-	tcpLog.Infof("<- %+v", funcRetValue)
+	s.log.Infof("<- %+v", funcRetValue)
 
 	if !funcRetError.IsNil() {
 		return nil, funcRetError.Interface().(error)

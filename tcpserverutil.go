@@ -104,24 +104,17 @@ func ReadRecord(r io.Reader) (*bytes.Buffer, error) {
 
 // WriteTCPReplyMessage writes an outgoing "reply" message with the appropriate framing structure
 // required by RPC-over-TCP.
-func WriteTCPReplyMessage(w io.Writer, xid uint32, acceptType AcceptType, ret interface{}) error {
-	// Buffer reply data so that we can compute a proper record marker later on
-	var buf bytes.Buffer
-
-	size, err := WriteReplyMessage(&buf, xid, acceptType, ret)
-	if err != nil {
-		return err
-	}
+func WriteTCPReplyMessage(w io.Writer, reply []byte) error {
 
 	// Write the record marker
 	//
 	// FIXME: Assuming we are sending a single record
-	if err := WriteRecordMarker(w, uint32(size), true); err != nil {
+	if err := WriteRecordMarker(w, uint32(len(reply)), true); err != nil {
 		return err
 	}
 
 	// Write the payload
-	if _, err := w.Write(buf.Bytes()); err != nil {
+	if _, err := w.Write(reply); err != nil {
 		return err
 	}
 
