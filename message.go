@@ -11,12 +11,22 @@ type AuthFlavor int32
 
 // All possible authentication flavors.
 const (
-	AuthFlavorNone AuthFlavor = 0
+	AuthFlavorNone AuthFlavor = iota
+	AuthFlavorUnix
+	AuthFlavorDes
 )
 
 type OpaqueAuth struct {
 	Flavor AuthFlavor
 	Body   []byte // Must be between 0 and 400 bytes
+}
+
+type AuthNone struct{}
+type AuthUnix struct {
+	Stamp       uint32
+	MachineName string
+	Uid, Gid    uint32
+	Gids        []uint32
 }
 
 //
@@ -86,6 +96,27 @@ const (
 type AcceptedReply struct {
 	Verf OpaqueAuth
 	Type AcceptType
+}
+
+type RejectStat uint32
+
+const (
+	RpcMismatch RejectStat = 0
+	AuthError              = 1
+)
+
+type AuthStat uint32
+
+const (
+	AuthBadCred AuthStat = iota
+	AuthRejectedCred
+	AuthBadVerf
+	AUthRejectedVerf
+	AuthTooWeak
+)
+
+type RejectedReply struct {
+	Stat RejectStat
 }
 
 type ProgMismatchReply struct {

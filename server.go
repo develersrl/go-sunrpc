@@ -13,6 +13,7 @@ type server struct {
 	procedures map[uint32]interface{}
 	procnames  map[uint32]string
 	log        *logrus.Entry
+	authFun    func(proc uint32, cred interface{}) bool
 }
 
 func newServer(program uint32, version uint32, f logrus.Fields) server {
@@ -68,6 +69,25 @@ func (s *server) handleRecord(record []byte) (bytes.Buffer, error) {
 		}
 		err := s.WriteReplyMessage(&reply, call.Header.Xid, ProgMismatch, &ret)
 		return reply, err
+	}
+
+	// Handle authentication (if the user requested so)
+	if s.authFun != nil {
+		auth, err := call.Body.Cred.Decode()
+		if err != nil {
+			s.log.WithField("err", err).Error("cannot decode authentication")
+			err := s.WriteReplyMessageRejectedAuth(&reply, call.Header.Xid, AuthBadCred)
+			return reply, err
+		}
+
+		if !s.authFun(call.Body.Procedure, auth) {
+			s.log.WithFields(logrus.Fields{
+				"proc": strconv.Itoa(int(call.Body.Procedure)),
+				"prog": strconv.Itoa(int(call.Body.Program)),
+			}).Info("authentication rejected by user")
+			err := s.WriteReplyMessageRejectedAuth(&reply, call.Header.Xid, AuthBadCred)
+			return reply, err
+		}
 	}
 
 	// Resolve function type from function table
