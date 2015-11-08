@@ -44,6 +44,9 @@ func (server *UDPServer) Serve(addr string) error {
 	if err := conn.SetReadBuffer(MaxUdpSize); err != nil {
 		return err
 	}
+	if err := conn.SetWriteBuffer(MaxUdpSize); err != nil {
+		return err
+	}
 
 	// Bind to RPCBIND server
 	if err := PortmapperSet(server.program, server.version, Udp, uint32(port)); err != nil {
