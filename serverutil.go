@@ -126,9 +126,9 @@ func (s *server) callFunc(r io.Reader, receiverFunc interface{}) (interface{}, e
 	funcArgValue := reflect.Indirect(reflect.ValueOf(funcArg))
 	funcRetValue := reflect.New(funcType.In(1).Elem())
 
-	s.log.Infof("-> %+v", funcArgValue)
+	s.log.Debugf("-> %+v", funcArgValue)
 	funcRetError := funcValue.Call([]reflect.Value{funcArgValue, funcRetValue})[0]
-	s.log.Infof("<- %+v", funcRetValue)
+	s.log.Debugf("<- %+v", funcRetValue)
 
 	if !funcRetError.IsNil() {
 		return nil, funcRetError.Interface().(error)

@@ -105,7 +105,7 @@ func (s *server) handleRecord(record []byte) (bytes.Buffer, error) {
 	s.log.WithFields(logrus.Fields{
 		"proc": strconv.Itoa(int(call.Body.Procedure)),
 		"name": s.procnames[call.Body.Procedure],
-	}).Info("RPC ", s.procnames[call.Body.Procedure])
+	}).Debug("RPC ", s.procnames[call.Body.Procedure])
 	acceptType := Success
 	ret, err := s.callFunc(r, receiverFunc)
 	if err != nil {
