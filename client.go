@@ -2,8 +2,8 @@ package sunrpc
 
 import (
 	"bytes"
-	"encoding/binary"
 	"io"
+	"net"
 
 	"github.com/rasky/go-xdr/xdr2"
 )
@@ -23,15 +23,17 @@ func WriteCall(w io.Writer, program uint32, version uint32, proc uint32, args in
 		return err
 	}
 
-	// Write the record marker before sending the payload
-	bytes := buf.Bytes()
-
-	if err := binary.Write(w, binary.LittleEndian, NewRecordMarker(uint32(len(bytes)), true)); err != nil {
-		return err
+	// On TCP transport, we need to write a record marker
+	// FIXME: this sniffing is really ugly; it'd be better to have a proper
+	// client class that knows whether it's TCP or UDP.
+	if _, ok := w.(*net.UDPConn); !ok {
+		if err := WriteRecordMarker(w, uint32(buf.Len()), true); err != nil {
+			return err
+		}
 	}
 
 	// Send the payload
-	if _, err := w.Write(bytes); err != nil {
+	if _, err := w.Write(buf.Bytes()); err != nil {
 		return err
 	}
 
