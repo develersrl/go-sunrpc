@@ -39,8 +39,7 @@ func (s *TCPServer) Serve(addr string) error {
 		return err
 	}
 
-	err = PortmapperSet(s.server.program, s.server.version, Tcp, uint32(portAsInt))
-	if err != nil {
+	if err := s.registerToPortmapper(Tcp, portAsInt); err != nil {
 		return err
 	}
 

@@ -48,8 +48,7 @@ func (server *UDPServer) Serve(addr string) error {
 		return err
 	}
 
-	// Bind to RPCBIND server
-	if err := PortmapperSet(server.program, server.version, Udp, uint32(port)); err != nil {
+	if err := server.registerToPortmapper(Udp, port); err != nil {
 		return err
 	}
 

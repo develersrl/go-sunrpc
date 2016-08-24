@@ -73,6 +73,8 @@ type ReplyType int32
 const (
 	Accepted ReplyType = 0
 	Denied   ReplyType = 1
+
+	InvalidReplyType ReplyType = -1
 )
 
 type ReplyBody struct {
@@ -103,6 +105,8 @@ type RejectStat uint32
 const (
 	RpcMismatch RejectStat = 0
 	AuthError              = 1
+
+	NoReject RejectStat = 0xFFFFFFFF
 )
 
 type AuthStat uint32
@@ -133,6 +137,27 @@ type ProgMismatchReply struct {
 type ProcedureCall struct {
 	Header Message
 	Body   CallBody
+}
+
+// ProcedureReply is the reply to a procedure call
+type ProcedureReply struct {
+	Header   Message
+	Type     ReplyType `xdr:"union"`
+	Accepted struct {
+		Verf         OpaqueAuth
+		Stat         AcceptType `xdr:"union"`
+		MismatchInfo struct {
+			Low, High uint32
+		} `xdr:"unioncase=2"` // ProgMismatch
+		// results follow here
+	} `xdr:"unioncase=0"`
+	Rejected struct {
+		Stat         RejectStat `xdr:"union"`
+		MismatchInfo struct {
+			Low, High uint32
+		} `xdr:"unioncase=0"` // RpcMismatch
+		AuthStat AuthStat `xdr:"unioncase=0"` // AuthError
+	} `xdr:"unioncase=1"`
 }
 
 // NewProcedureCall creates a new RPC call packet with a transaction ID derived from the current

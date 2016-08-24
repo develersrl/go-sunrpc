@@ -2,40 +2,235 @@ package sunrpc
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"io"
 	"net"
+	"sync"
+	"time"
 
 	"github.com/rasky/go-xdr/xdr2"
 )
 
-// WriteCall writes an RPC "call" message to the given writer in order to call a remote procedure
-// with the given program, version and procedure identifiers. Args holds the arguments to pass to
-// the remote procedure.
-func WriteCall(w io.Writer, program uint32, version uint32, proc uint32, args interface{}) error {
+type ClientTransport uint32
+
+const (
+	ClientTransportTcpUdp  ClientTransport = iota // first try TCP, fallback to UDP
+	ClientTransportUdpTcp                         // first try UDP, fallback to TCP
+	ClientTransportTcpOnly                        // TCP only
+	ClientTransportUdpOnly                        // UDP only
+)
+
+type ClientConfig struct {
+	Transport ClientTransport // transport to use (default: ClientTransportTcpUdp)
+	Timeout   time.Duration   // read/write timeout (default: no timeout)
+}
+
+type Client struct {
+	Addr    string
+	Program uint32
+	Version uint32
+	cfg     ClientConfig
+
+	mu           sync.Mutex
+	conn         net.Conn
+	disconnected bool
+}
+
+// NewClient creates a new RPC client. The client will connect to a RPC server at the specified
+// address (in net.Dial format), and will talk to the specified program/version service.
+// cfg contains the optional configuration for this client.
+// This function does not attempt any connection; the client will lazily connect (and possibly error out)
+// when Call() is first called. You can call proc #0 (always reserved as ping) if you need to check
+// the presence of the service.
+func NewClient(addr string, program, version uint32, cfg *ClientConfig) *Client {
+	xcfg := *cfg
+
+	var zd time.Duration
+	if xcfg.Timeout == zd {
+		xcfg.Timeout = 5 * time.Second
+	}
+
+	return &Client{
+		Addr:         addr,
+		Program:      program,
+		Version:      version,
+		cfg:          xcfg,
+		disconnected: true,
+	}
+}
+
+func (c *Client) Close() {
+	c.mu.Lock()
+	c.close()
+	c.mu.Unlock()
+}
+
+// Call the specified proc in the RPC server, optionally passing some args, and receive
+// the reply body in reply.
+//
+// On top of network errors, err can be one of the errors defined in this package to signal
+// specific error conditions that callers might want to specifically handle.
+func (c *Client) Call(proc uint32, args, reply interface{}) (err error) {
+	return c.CallProgram(c.Program, c.Version, proc, args, reply)
+}
+
+// CallProgram is like Call, but allows to define a non-default program and version.
+func (c *Client) CallProgram(program, version uint32, proc uint32, args, reply interface{}) error {
+	if c.disconnected {
+		if err := c.reconnect(); err != nil {
+			return err
+		}
+		if proc == 0 {
+			// we already executed a ping during reconnection, so don't send a second one
+			return nil
+		}
+	}
+
 	var buf bytes.Buffer
 
-	if _, err := xdr.Marshal(&buf, NewProcedureCall(program, version, proc)); err != nil {
+	pcall := NewProcedureCall(program, version, proc)
+	if _, err := xdr.Marshal(&buf, pcall); err != nil {
 		return err
 	}
 
-	// Write procedure arguments to the buffer
-	if _, err := xdr.Marshal(&buf, args); err != nil {
-		return err
+	// Write procedure arguments to the buffer (if any)
+	if args != nil {
+		if _, err := xdr.Marshal(&buf, args); err != nil {
+			return err
+		}
+	}
+
+	// Set write timeout to avoid stalling forever
+	var zd time.Duration
+	if c.cfg.Timeout != zd {
+		c.conn.SetWriteDeadline(time.Now().Add(c.cfg.Timeout))
 	}
 
 	// On TCP transport, we need to write a record marker
-	// FIXME: this sniffing is really ugly; it'd be better to have a proper
-	// client class that knows whether it's TCP or UDP.
-	if _, ok := w.(*net.UDPConn); !ok {
-		if err := WriteRecordMarker(w, uint32(buf.Len()), true); err != nil {
+	if _, ok := c.conn.(*net.UDPConn); !ok {
+		if err := WriteRecordMarker(c.conn, uint32(buf.Len()), true); err != nil {
+			c.disconnected = true
 			return err
 		}
 	}
 
 	// Send the payload
-	if _, err := w.Write(buf.Bytes()); err != nil {
+	if _, err := c.conn.Write(buf.Bytes()); err != nil {
+		c.disconnected = true
 		return err
 	}
 
+	// Read the reply header. We want this to happen in a pure network
+	// read so that we can detect whether the server is actually replying
+	// or there is a network error (specifically important in case of UDP:
+	// in fact, in that case, this is where we get an error if the UDP port
+	// was closed while sending).
+	var replyh ProcedureReply
+
+	if c.cfg.Timeout != zd {
+		c.conn.SetReadDeadline(time.Now().Add(c.cfg.Timeout))
+	}
+
+	var reader io.Reader = c.conn
+
+	// On TCP transport, we need to read the record through different markers
+	if _, ok := c.conn.(*net.UDPConn); !ok {
+		if buf, err := ReadRecord(c.conn); err != nil {
+			c.disconnected = true
+			return err
+		} else {
+			reader = buf
+		}
+	}
+
+	if _, err := xdr.Unmarshal(reader, &replyh); err != nil {
+		return err
+	}
+
+	if replyh.Header.Xid != pcall.Header.Xid {
+		return errors.New("invalid Xid in reply")
+	}
+
+	if replyh.Header.Type != Reply {
+		return errors.New("invalid reply type")
+	}
+
+	if replyh.Type != Accepted {
+		switch replyh.Rejected.Stat {
+		case RpcMismatch:
+			return &ErrRpcMismatch{High: replyh.Rejected.MismatchInfo.High, Low: replyh.Rejected.MismatchInfo.Low}
+		case AuthError:
+			return &ErrAuth{Stat: replyh.Rejected.AuthStat}
+		default:
+			c.disconnected = true
+			return fmt.Errorf("RPC reply has invalid wire format")
+		}
+	}
+
+	if replyh.Accepted.Stat != Success {
+		switch replyh.Accepted.Stat {
+		case ProgMismatch:
+			return &ErrProgMismatch{High: replyh.Accepted.MismatchInfo.High, Low: replyh.Accepted.MismatchInfo.Low}
+		case ProcUnavail:
+			return &ErrProcUnavail{}
+		case ProgUnavail:
+			return &ErrProgUnavail{}
+		case GarbageArgs:
+			return &ErrGarbageArgs{}
+		}
+	}
+
+	// Everything is OK, read reply body (if any)
+	if reply != nil {
+		if _, err := xdr.Unmarshal(reader, reply); err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+func (c *Client) close() {
+	if c.conn != nil {
+		c.conn.Close()
+		c.conn = nil
+	}
+	c.disconnected = true
+}
+
+func (c *Client) reconnect() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.close()
+
+	var prot []string
+	switch c.cfg.Transport {
+	case ClientTransportTcpUdp:
+		prot = []string{"tcp", "udp"}
+	case ClientTransportUdpTcp:
+		prot = []string{"udp", "tcp"}
+	case ClientTransportUdpOnly:
+		prot = []string{"udp"}
+	case ClientTransportTcpOnly:
+		prot = []string{"tcp"}
+	}
+
+	for _, p := range prot {
+		conn, err := net.Dial(p, c.Addr)
+		if err == nil {
+			c.conn = conn
+			c.disconnected = false
+			// Check with procedure 0, which is always reserved as a ping
+			if c.Call(0, nil, nil) == nil {
+				return nil
+			}
+			c.conn = nil
+			c.disconnected = true
+		}
+		conn.Close()
+	}
+
+	return errors.New("cannot connect to RPC server")
 }

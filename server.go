@@ -36,6 +36,37 @@ func (server *server) RegisterWithName(proc uint32, rcvr interface{}, name strin
 	server.procnames[proc] = name
 }
 
+func (server *server) registerToPortmapper(prot PortmapperProtocol, port int) error {
+	// Check if the portmapper server is available, to return a proper high-level error
+	// rather than a generic socket error.
+	if !PortmapperAvailable() {
+		return ErrorPortmapperNotFound
+	}
+
+	// First check if there's a mapping already. We do this because Linux rpcbind server (but not OSX)
+	// is smart enough to use this call to also verify whether a registered service
+	// is still alive (listening on that port), and if it doesn't, it returns zero.
+	//
+	// Assuming an application where the user is free to change listening port in configuration,
+	// this would allow the user to run the application more than one time with different ports,
+	// without getting errors, as the call to PortmapperGet() would effectively deregister the
+	// previous registration automatically.
+	getport, err := PortmapperGet(server.program, server.version, prot)
+	switch {
+	case err != nil:
+		return err
+	case getport == 0:
+		// no service found, we need to register again
+		return PortmapperSet(server.program, server.version, prot, uint32(port))
+	case getport != uint32(port):
+		// found a service with a different port, returns error
+		return ErrorPortmapperServiceExists
+	default:
+		// port is what we expect, we are already registered, nothing to do
+		return nil
+	}
+}
+
 func (s *server) handleRecord(record []byte) (bytes.Buffer, error) {
 
 	var reply bytes.Buffer

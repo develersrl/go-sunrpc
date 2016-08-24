@@ -1,6 +1,8 @@
 package sunrpc
 
 import (
+	"errors"
+	"fmt"
 	"net"
 	"runtime"
 	"sync"
@@ -8,9 +10,11 @@ import (
 
 // RPC program ID, version number and other stuff to speak the Portmapper protocol.
 const (
-	PortmapperProgram = 100000
-	PortmapperVersion = 2
-	PortmapperPortSet = 1
+	PortmapperProgram   = 100000
+	PortmapperVersion   = 2
+	PortmapperPortSet   = 1
+	PortmapperPortUnset = 2
+	PortmapperPortGet   = 3
 )
 
 // PortmapperProtocol is an enumeration denoting whether the RPC server we are registering runs over
@@ -24,7 +28,7 @@ const (
 	Udp PortmapperProtocol = 17
 )
 
-type mapping struct {
+type pmapMapping struct {
 	Program  uint32
 	Version  uint32
 	Protocol PortmapperProtocol
@@ -32,6 +36,19 @@ type mapping struct {
 }
 
 var pmapInit sync.Once
+var pmapClient *Client
+
+var (
+	ErrorPortmapperNotFound = errors.New("rpcbind server not found on localhost:111")
+
+	// ErrorPortmapperServiceExists is returned by a call to PortmapperSet if there is already a
+	// service registered for the specified triplet (program, version, protocol)
+	ErrorPortmapperServiceExists = errors.New("RPC service is already registered")
+
+	// ErrorPortmapperServiceDoesntExist is returned by a call to PortmapperUnset if there was no
+	// service registered for the specified triplet (program, version, protocol)
+	ErrorPortmapperServiceDoesntExist = errors.New("RPC service doesn't exist")
+)
 
 // Initialize connection to portmapper.
 //
@@ -57,7 +74,20 @@ func PortmapperInit() {
 			act.Read(data[:])
 			act.Close()
 		}
+
+		pmapClient = NewClient("127.0.0.1:111", PortmapperProgram, PortmapperVersion, nil)
 	})
+}
+
+// PortmapperAvailable returns true if we can correctly communicate with the portmapper server
+func PortmapperAvailable() bool {
+	PortmapperInit()
+
+	if err := pmapClient.Call(0, nil, nil); err != nil {
+		return false
+	}
+
+	return true
 }
 
 // PortmapperSet associates an RPC server with a Portmapper server running on the current host
@@ -65,19 +95,58 @@ func PortmapperInit() {
 func PortmapperSet(program uint32, version uint32, protocol PortmapperProtocol, port uint32) error {
 	PortmapperInit()
 
-	conn, err := net.Dial("tcp", "127.0.0.1:111")
-	if err != nil {
-		conn, err = net.Dial("udp", "127.0.0.1:111")
-		if err != nil {
-			return err
-		}
-	}
-	defer conn.Close()
-
-	return WriteCall(conn, PortmapperProgram, PortmapperVersion, PortmapperPortSet, mapping{
+	mapping := pmapMapping{
 		Program:  program,
 		Version:  version,
 		Protocol: protocol,
 		Port:     port,
-	})
+	}
+
+	var ok bool
+	if err := pmapClient.Call(PortmapperPortSet, &mapping, &ok); err != nil {
+		return fmt.Errorf("cannot register to rpcbind server: %v", err)
+	}
+
+	if !ok {
+		return ErrorPortmapperServiceExists
+	}
+
+	return nil
+}
+
+func PortmapperUnset(program uint32, version uint32) error {
+	PortmapperInit()
+
+	mapping := pmapMapping{
+		Program: program,
+		Version: version,
+	}
+
+	var ok uint32
+	if err := pmapClient.Call(PortmapperPortUnset, &mapping, &ok); err != nil {
+		return fmt.Errorf("cannot deregister from rpcbind server: %v", err)
+	}
+
+	if ok != 1 {
+		return ErrorPortmapperServiceDoesntExist
+	}
+
+	return nil
+}
+
+func PortmapperGet(program uint32, version uint32, protocol PortmapperProtocol) (uint32, error) {
+	PortmapperInit()
+
+	mapping := pmapMapping{
+		Program:  program,
+		Version:  version,
+		Protocol: protocol,
+	}
+
+	var port uint32
+	if err := pmapClient.Call(PortmapperPortGet, &mapping, &port); err != nil {
+		return 0, fmt.Errorf("cannot query rpcbind server: %v", err)
+	}
+
+	return port, nil
 }
