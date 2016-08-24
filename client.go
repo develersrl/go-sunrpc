@@ -44,6 +44,9 @@ type Client struct {
 // when Call() is first called. You can call proc #0 (always reserved as ping) if you need to check
 // the presence of the service.
 func NewClient(addr string, program, version uint32, cfg *ClientConfig) *Client {
+	if cfg == nil {
+		cfg = &ClientConfig{}
+	}
 	return &Client{
 		Addr:         addr,
 		Program:      program,
@@ -221,8 +224,8 @@ func (c *Client) reconnect() error {
 			}
 			c.conn = nil
 			c.disconnected = true
+			conn.Close()
 		}
-		conn.Close()
 	}
 
 	return errors.New("cannot connect to RPC server")
