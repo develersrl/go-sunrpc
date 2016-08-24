@@ -59,7 +59,7 @@ func ReadRecordMarker(r io.Reader) (size uint32, last bool, err error) {
 // WriteRecordMarker writes the a record marker to a Writer with the given size and "last fragment"
 // indicator with the appropriate endianness.
 func WriteRecordMarker(w io.Writer, size uint32, last bool) error {
-	record := NewRecordMarker(uint32(size), true)
+	record := NewRecordMarker(uint32(size), last)
 
 	if err := binary.Write(w, binary.BigEndian, record); err != nil {
 		return err
