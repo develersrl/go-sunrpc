@@ -44,18 +44,11 @@ type Client struct {
 // when Call() is first called. You can call proc #0 (always reserved as ping) if you need to check
 // the presence of the service.
 func NewClient(addr string, program, version uint32, cfg *ClientConfig) *Client {
-	xcfg := *cfg
-
-	var zd time.Duration
-	if xcfg.Timeout == zd {
-		xcfg.Timeout = 5 * time.Second
-	}
-
 	return &Client{
 		Addr:         addr,
 		Program:      program,
 		Version:      version,
-		cfg:          xcfg,
+		cfg:          *cfg,
 		disconnected: true,
 	}
 }
