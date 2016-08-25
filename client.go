@@ -12,6 +12,8 @@ import (
 	"github.com/rasky/go-xdr/xdr2"
 )
 
+const ClientMaxRpcMessageSize = 32 * 1024
+
 type ClientTransport uint32
 
 const (
@@ -35,6 +37,13 @@ type Client struct {
 	mu           sync.Mutex
 	conn         net.Conn
 	disconnected bool
+}
+
+var clientBufPool = sync.Pool{
+	New: func() interface{} {
+		data := make([]byte, ClientMaxRpcMessageSize)
+		return &data
+	},
 }
 
 // NewClient creates a new RPC client. The client will connect to a RPC server at the specified
@@ -88,7 +97,10 @@ func (c *Client) CallProgram(program, version uint32, proc uint32, args, reply i
 		}
 	}
 
+	var useUdp bool
 	var buf bytes.Buffer
+
+	_, useUdp = c.conn.(*net.UDPConn)
 
 	pcall := NewProcedureCall(program, version, proc)
 	if _, err := xdr.Marshal(&buf, pcall); err != nil {
@@ -109,17 +121,27 @@ func (c *Client) CallProgram(program, version uint32, proc uint32, args, reply i
 	}
 
 	// On TCP transport, we need to write a record marker
-	if _, ok := c.conn.(*net.UDPConn); !ok {
-		if err := WriteRecordMarker(c.conn, uint32(buf.Len()), true); err != nil {
+	if !useUdp {
+		// Because of a bug on the Linux implementation of rpcbind, we want
+		// to send the record marker and the payload in a single TCP segment
+		// if possible (so with a single conn.Write)
+		full := bytes.NewBuffer(make([]byte, 0, buf.Len()+4))
+		if err := WriteRecordMarker(full, uint32(buf.Len()), true); err != nil {
+			return err
+		}
+		io.Copy(full, &buf)
+
+		// Send the payload
+		if _, err := c.conn.Write(full.Bytes()); err != nil {
 			c.disconnected = true
 			return err
 		}
-	}
-
-	// Send the payload
-	if _, err := c.conn.Write(buf.Bytes()); err != nil {
-		c.disconnected = true
-		return err
+	} else {
+		// Send the payload
+		if _, err := c.conn.Write(buf.Bytes()); err != nil {
+			c.disconnected = true
+			return err
+		}
 	}
 
 	// Read the reply header. We want this to happen in a pure network
@@ -133,15 +155,28 @@ func (c *Client) CallProgram(program, version uint32, proc uint32, args, reply i
 		c.conn.SetReadDeadline(time.Now().Add(c.cfg.Timeout))
 	}
 
-	var reader io.Reader = c.conn
+	var reader io.Reader
 
-	// On TCP transport, we need to read the record through different markers
 	if _, ok := c.conn.(*net.UDPConn); !ok {
+		// On TCP transport, we need to read the record through different markers
 		if buf, err := ReadRecord(c.conn); err != nil {
 			c.disconnected = true
 			return err
 		} else {
 			reader = buf
+		}
+	} else {
+		// On UDP, we need to read the whole answer through a single Read()
+		// call because it is a single datagram. Use a pool of buffers
+		// to speed up processing
+		buf := clientBufPool.Get().(*[]byte)
+		defer clientBufPool.Put(buf)
+
+		if n, err := c.conn.Read(*buf); err != nil {
+			c.disconnected = true
+			return err
+		} else {
+			reader = bytes.NewReader((*buf)[:n])
 		}
 	}
 
