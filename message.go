@@ -1,6 +1,9 @@
 package sunrpc
 
-import "time"
+import (
+	"sync/atomic"
+	"time"
+)
 
 //
 // Authorization Data
@@ -160,12 +163,14 @@ type ProcedureReply struct {
 	} `xdr:"unioncase=1"`
 }
 
+var xidCounter = int32(time.Now().UnixNano())
+
 // NewProcedureCall creates a new RPC call packet with a transaction ID derived from the current
 // UNIX time stamp.
 func NewProcedureCall(program uint32, version uint32, procedure uint32) *ProcedureCall {
 	return &ProcedureCall{
 		Header: Message{
-			Xid:  uint32(time.Now().Unix()),
+			Xid:  uint32(atomic.AddInt32(&xidCounter, 1)),
 			Type: Call,
 		},
 		Body: CallBody{
