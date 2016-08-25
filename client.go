@@ -23,7 +23,7 @@ const (
 
 type ClientConfig struct {
 	Transport ClientTransport // transport to use (default: ClientTransportTcpUdp)
-	Timeout   time.Duration   // read/write timeout (default: no timeout)
+	Timeout   time.Duration   // read/write timeout (default: 5 seconds)
 }
 
 type Client struct {
@@ -47,6 +47,11 @@ func NewClient(addr string, program, version uint32, cfg *ClientConfig) *Client 
 	if cfg == nil {
 		cfg = &ClientConfig{}
 	}
+	var zz time.Duration
+	if cfg.Timeout == zz {
+		cfg.Timeout = 5 * time.Second
+	}
+
 	return &Client{
 		Addr:         addr,
 		Program:      program,
